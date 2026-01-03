@@ -23,6 +23,8 @@ export interface Company {
   phone: string | null
   email: string | null
   tax_id: string | null
+  vat_rate: number
+  vat_reporting_period: 'monthly' | 'bimonthly'
   created_at: string
 }
 
@@ -78,6 +80,9 @@ export interface Income {
   category_id: string | null
   customer_id: string | null
   amount: number
+  amount_before_vat: number | null
+  vat_amount: number | null
+  vat_exempt: boolean
   date: string
   description: string | null
   invoice_number: string | null
@@ -97,6 +102,10 @@ export interface Expense {
   category_id: string | null
   supplier_id: string | null
   amount: number
+  amount_before_vat: number | null
+  vat_amount: number | null
+  vat_exempt: boolean
+  vat_deductible: boolean
   date: string
   description: string | null
   invoice_number: string | null
@@ -208,6 +217,9 @@ export interface IncomeFormData {
   category_id: string
   customer_id?: string
   amount: number
+  amount_before_vat?: number
+  vat_amount?: number
+  vat_exempt?: boolean
   date: string
   description?: string
   invoice_number?: string
@@ -219,6 +231,10 @@ export interface ExpenseFormData {
   category_id: string
   supplier_id?: string
   amount: number
+  amount_before_vat?: number
+  vat_amount?: number
+  vat_exempt?: boolean
+  vat_deductible?: boolean
   date: string
   description?: string
   invoice_number?: string
@@ -279,6 +295,19 @@ export interface BudgetVsActual {
   actual: number
   percentage: number
   difference: number
+}
+
+// סיכום מע"מ
+export interface VatSummary {
+  period: string
+  income_before_vat: number
+  income_vat: number
+  income_total: number
+  expense_before_vat: number
+  expense_vat: number
+  expense_vat_deductible: number
+  expense_total: number
+  vat_to_pay: number
 }
 
 // ============================================

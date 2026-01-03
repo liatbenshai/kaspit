@@ -15,6 +15,8 @@ import { formatCurrency, formatDateShort, translateStatus, getStatusColor } from
 import { Plus, Upload, Search, Pencil, Trash2, RotateCcw } from 'lucide-react'
 import type { Expense, Category, Supplier } from '@/types'
 
+const VAT_RATE = 0.18 // 18% מע"מ
+
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -30,7 +32,11 @@ export default function ExpensesPage() {
   const [formData, setFormData] = useState({
     category_id: '',
     supplier_id: '',
+    amount_before_vat: '',
+    vat_amount: '',
     amount: '',
+    vat_exempt: false,
+    vat_deductible: true,
     date: new Date().toISOString().split('T')[0],
     description: '',
     invoice_number: '',
@@ -41,9 +47,43 @@ export default function ExpensesPage() {
     recurring_day: '',
   })
 
+  const [inputMode, setInputMode] = useState<'before_vat' | 'total'>('before_vat')
+
   useEffect(() => {
     loadData()
   }, [])
+
+  // חישוב מע"מ אוטומטי
+  useEffect(() => {
+    if (formData.vat_exempt) {
+      setFormData(prev => ({
+        ...prev,
+        vat_amount: '0',
+        amount: prev.amount_before_vat
+      }))
+      return
+    }
+
+    if (inputMode === 'before_vat' && formData.amount_before_vat) {
+      const beforeVat = parseFloat(formData.amount_before_vat) || 0
+      const vat = Math.round(beforeVat * VAT_RATE * 100) / 100
+      const total = Math.round((beforeVat + vat) * 100) / 100
+      setFormData(prev => ({
+        ...prev,
+        vat_amount: String(vat),
+        amount: String(total)
+      }))
+    } else if (inputMode === 'total' && formData.amount) {
+      const total = parseFloat(formData.amount) || 0
+      const beforeVat = Math.round((total / (1 + VAT_RATE)) * 100) / 100
+      const vat = Math.round((total - beforeVat) * 100) / 100
+      setFormData(prev => ({
+        ...prev,
+        amount_before_vat: String(beforeVat),
+        vat_amount: String(vat)
+      }))
+    }
+  }, [formData.amount_before_vat, formData.amount, formData.vat_exempt, inputMode])
 
   const loadData = async () => {
     try {
@@ -101,6 +141,10 @@ export default function ExpensesPage() {
         category_id: formData.category_id || null,
         supplier_id: formData.supplier_id || null,
         amount: parseFloat(formData.amount),
+        amount_before_vat: parseFloat(formData.amount_before_vat) || null,
+        vat_amount: parseFloat(formData.vat_amount) || null,
+        vat_exempt: formData.vat_exempt,
+        vat_deductible: formData.vat_deductible,
         date: formData.date,
         description: formData.description || null,
         invoice_number: formData.invoice_number || null,
@@ -134,7 +178,11 @@ export default function ExpensesPage() {
     setFormData({
       category_id: item.category_id || '',
       supplier_id: item.supplier_id || '',
+      amount_before_vat: String(item.amount_before_vat || ''),
+      vat_amount: String(item.vat_amount || ''),
       amount: String(item.amount),
+      vat_exempt: item.vat_exempt || false,
+      vat_deductible: item.vat_deductible !== false,
       date: item.date,
       description: item.description || '',
       invoice_number: item.invoice_number || '',
@@ -156,14 +204,25 @@ export default function ExpensesPage() {
   const handleImport = async (data: Record<string, any>[]) => {
     if (!companyId) return
 
-    const expenseRecords = data.map(row => ({
-      company_id: companyId,
-      amount: parseFloat(row.amount) || 0,
-      date: row.date || new Date().toISOString().split('T')[0],
-      description: row.description || null,
-      invoice_number: row.invoice_number || null,
-      payment_status: row.payment_status || 'pending',
-    }))
+    const expenseRecords = data.map(row => {
+      const amount = parseFloat(row.amount) || 0
+      const vatExempt = row.vat_exempt === 'true' || row.vat_exempt === true
+      const amountBeforeVat = vatExempt ? amount : Math.round((amount / (1 + VAT_RATE)) * 100) / 100
+      const vatAmount = vatExempt ? 0 : Math.round((amount - amountBeforeVat) * 100) / 100
+
+      return {
+        company_id: companyId,
+        amount: amount,
+        amount_before_vat: amountBeforeVat,
+        vat_amount: vatAmount,
+        vat_exempt: vatExempt,
+        vat_deductible: true,
+        date: row.date || new Date().toISOString().split('T')[0],
+        description: row.description || null,
+        invoice_number: row.invoice_number || null,
+        payment_status: row.payment_status || 'pending',
+      }
+    })
 
     const { error } = await supabase.from('expenses').insert(expenseRecords)
     if (error) throw error
@@ -174,7 +233,11 @@ export default function ExpensesPage() {
     setFormData({
       category_id: '',
       supplier_id: '',
+      amount_before_vat: '',
+      vat_amount: '',
       amount: '',
+      vat_exempt: false,
+      vat_deductible: true,
       date: new Date().toISOString().split('T')[0],
       description: '',
       invoice_number: '',
@@ -184,6 +247,7 @@ export default function ExpensesPage() {
       is_recurring: false,
       recurring_day: '',
     })
+    setInputMode('before_vat')
   }
 
   const filteredExpenses = expenses.filter(item => {
@@ -197,6 +261,11 @@ export default function ExpensesPage() {
   })
 
   const totalAmount = filteredExpenses.reduce((sum, item) => sum + Number(item.amount), 0)
+  const totalVat = filteredExpenses.reduce((sum, item) => sum + Number(item.vat_amount || 0), 0)
+  const totalVatDeductible = filteredExpenses
+    .filter(item => item.vat_deductible)
+    .reduce((sum, item) => sum + Number(item.vat_amount || 0), 0)
+  const totalBeforeVat = filteredExpenses.reduce((sum, item) => sum + Number(item.amount_before_vat || item.amount), 0)
 
   if (loading) {
     return (
@@ -252,15 +321,24 @@ export default function ExpensesPage() {
         </div>
       </Card>
 
-      {/* Summary */}
-      <div className="bg-danger-50 border border-danger-200 rounded-lg p-4">
-        <div className="flex items-center justify-between">
-          <span className="text-danger-800 font-medium">
-            סה״כ: {filteredExpenses.length} הוצאות
-          </span>
-          <span className="text-danger-800 font-bold text-lg">
-            {formatCurrency(totalAmount)}
-          </span>
+      {/* Summary with VAT */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <p className="text-sm text-gray-500">לפני מע״מ</p>
+          <p className="text-xl font-bold text-gray-900">{formatCurrency(totalBeforeVat)}</p>
+        </div>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <p className="text-sm text-blue-600">מע״מ (18%)</p>
+          <p className="text-xl font-bold text-blue-700">{formatCurrency(totalVat)}</p>
+        </div>
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <p className="text-sm text-green-600">מע״מ לקיזוז</p>
+          <p className="text-xl font-bold text-green-700">{formatCurrency(totalVatDeductible)}</p>
+        </div>
+        <div className="bg-danger-50 border border-danger-200 rounded-lg p-4">
+          <p className="text-sm text-danger-600">סה״כ כולל מע״מ</p>
+          <p className="text-xl font-bold text-danger-700">{formatCurrency(totalAmount)}</p>
+          <p className="text-xs text-danger-600">{filteredExpenses.length} הוצאות</p>
         </div>
       </div>
 
@@ -273,7 +351,9 @@ export default function ExpensesPage() {
               <TableHead>תיאור</TableHead>
               <TableHead>קטגוריה</TableHead>
               <TableHead>ספק</TableHead>
-              <TableHead>סכום</TableHead>
+              <TableHead>לפני מע״מ</TableHead>
+              <TableHead>מע״מ</TableHead>
+              <TableHead>סה״כ</TableHead>
               <TableHead>סטטוס</TableHead>
               <TableHead>פעולות</TableHead>
             </TableRow>
@@ -281,7 +361,7 @@ export default function ExpensesPage() {
           <TableBody>
             {filteredExpenses.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={9} className="text-center py-8 text-gray-500">
                   אין הוצאות להצגה
                 </TableCell>
               </TableRow>
@@ -299,6 +379,14 @@ export default function ExpensesPage() {
                         {item.invoice_number && (
                           <p className="text-xs text-gray-500">חשבונית: {item.invoice_number}</p>
                         )}
+                        <div className="flex gap-1">
+                          {item.vat_exempt && (
+                            <Badge variant="default" size="sm">פטור</Badge>
+                          )}
+                          {!item.vat_deductible && !item.vat_exempt && (
+                            <Badge variant="warning" size="sm">לא לקיזוז</Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </TableCell>
@@ -314,11 +402,13 @@ export default function ExpensesPage() {
                         />
                         {item.category.name}
                       </span>
-                    ) : (
-                      '-'
-                    )}
+                    ) : '-'}
                   </TableCell>
                   <TableCell>{item.supplier?.name || '-'}</TableCell>
+                  <TableCell>{formatCurrency(item.amount_before_vat || item.amount)}</TableCell>
+                  <TableCell className="text-blue-600">
+                    {item.vat_exempt ? '-' : formatCurrency(item.vat_amount || 0)}
+                  </TableCell>
                   <TableCell className="font-semibold text-danger-600">
                     {formatCurrency(item.amount)}
                   </TableCell>
@@ -362,21 +452,106 @@ export default function ExpensesPage() {
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          {/* VAT Input Mode Toggle */}
+          <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+            <span className="text-sm font-medium text-gray-700">הזנת סכום:</span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setInputMode('before_vat')}
+                className={`px-3 py-1 rounded text-sm ${
+                  inputMode === 'before_vat'
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-white border text-gray-700'
+                }`}
+              >
+                לפני מע״מ
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputMode('total')}
+                className={`px-3 py-1 rounded text-sm ${
+                  inputMode === 'total'
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-white border text-gray-700'
+                }`}
+              >
+                כולל מע״מ
+              </button>
+            </div>
+          </div>
+
+          {/* VAT Toggles */}
+          <div className="flex gap-6">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.vat_exempt}
+                onChange={(e) => setFormData({ ...formData, vat_exempt: e.target.checked })}
+                className="w-4 h-4 text-primary-600 rounded"
+              />
+              <span className="text-sm font-medium">פטור ממע״מ</span>
+            </label>
+            {!formData.vat_exempt && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.vat_deductible}
+                  onChange={(e) => setFormData({ ...formData, vat_deductible: e.target.checked })}
+                  className="w-4 h-4 text-primary-600 rounded"
+                />
+                <span className="text-sm font-medium">מע״מ לקיזוז</span>
+              </label>
+            )}
+          </div>
+
+          {/* Amount Fields */}
+          <div className="grid grid-cols-3 gap-4">
             <Input
-              label="סכום"
+              label={inputMode === 'before_vat' ? 'סכום לפני מע״מ *' : 'סכום לפני מע״מ'}
+              type="number"
+              step="0.01"
+              value={formData.amount_before_vat}
+              onChange={(e) => {
+                setInputMode('before_vat')
+                setFormData({ ...formData, amount_before_vat: e.target.value })
+              }}
+              required={inputMode === 'before_vat'}
+            />
+            <Input
+              label="מע״מ (18%)"
+              type="number"
+              step="0.01"
+              value={formData.vat_amount}
+              disabled
+              className="bg-gray-50"
+            />
+            <Input
+              label={inputMode === 'total' ? 'סכום כולל מע״מ *' : 'סכום כולל מע״מ'}
               type="number"
               step="0.01"
               value={formData.amount}
-              onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-              required
+              onChange={(e) => {
+                setInputMode('total')
+                setFormData({ ...formData, amount: e.target.value })
+              }}
+              required={inputMode === 'total'}
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <Input
               label="תאריך"
               type="date"
               value={formData.date}
               onChange={(e) => setFormData({ ...formData, date: e.target.value })}
               required
+            />
+            <Input
+              label="תאריך יעד לתשלום"
+              type="date"
+              value={formData.due_date}
+              onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
             />
           </div>
 
@@ -408,19 +583,11 @@ export default function ExpensesPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="מספר חשבונית"
-              value={formData.invoice_number}
-              onChange={(e) => setFormData({ ...formData, invoice_number: e.target.value })}
-            />
-            <Input
-              label="תאריך יעד לתשלום"
-              type="date"
-              value={formData.due_date}
-              onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-            />
-          </div>
+          <Input
+            label="מספר חשבונית"
+            value={formData.invoice_number}
+            onChange={(e) => setFormData({ ...formData, invoice_number: e.target.value })}
+          />
 
           <div className="grid grid-cols-2 gap-4">
             <Select
@@ -494,10 +661,11 @@ export default function ExpensesPage() {
         <ExcelImport
           type="expense"
           requiredFields={[
-            { key: 'amount', label: 'סכום', required: true },
+            { key: 'amount', label: 'סכום (כולל מע״מ)', required: true },
             { key: 'date', label: 'תאריך', required: true },
             { key: 'description', label: 'תיאור', required: false },
             { key: 'invoice_number', label: 'מספר חשבונית', required: false },
+            { key: 'vat_exempt', label: 'פטור ממע״מ (true/false)', required: false },
             { key: 'payment_status', label: 'סטטוס', required: false },
           ]}
           onImport={handleImport}

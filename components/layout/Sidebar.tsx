@@ -15,6 +15,7 @@ import {
   Users,
   Settings,
   LogOut,
+  Calculator,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -23,9 +24,9 @@ const navigation = [
   { name: 'הכנסות', href: '/income', icon: TrendingUp },
   { name: 'הוצאות', href: '/expenses', icon: TrendingDown },
   { name: 'תנועות בנק', href: '/bank', icon: Building2 },
-  { name: 'חשבוניות', href: '/invoices', icon: Receipt },
   { name: 'תקציב', href: '/budget', icon: PieChart },
   { name: 'דוחות', href: '/reports', icon: BarChart3 },
+  { name: 'דוח מע״מ', href: '/vat-report', icon: Calculator },
   { name: 'קטגוריות', href: '/categories', icon: Tags },
   { name: 'ספקים ולקוחות', href: '/contacts', icon: Users },
   { name: 'הגדרות', href: '/settings', icon: Settings },

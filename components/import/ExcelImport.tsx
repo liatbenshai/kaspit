@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Alert } from '@/components/ui/Alert'
 import { Select } from '@/components/ui/Select'
-import { Upload, FileSpreadsheet, X, Check } from 'lucide-react'
+import { Upload, FileSpreadsheet, X, Check, Download } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 interface ExcelImportProps {
@@ -13,6 +13,27 @@ interface ExcelImportProps {
   requiredFields: { key: string; label: string; required: boolean }[]
   onImport: (data: Record<string, any>[]) => Promise<void>
   onClose: () => void
+}
+
+const templateUrls = {
+  income: '/templates/income-template.csv',
+  expense: '/templates/expenses-template.csv',
+  bank: '/templates/bank-template.csv',
+}
+
+const templateInfo = {
+  income: {
+    title: 'תבנית הכנסות',
+    columns: ['תאריך', 'סכום (כולל מע״מ)', 'תיאור', 'מספר חשבונית', 'פטור ממע״מ (true/false)', 'סטטוס (paid/pending)'],
+  },
+  expense: {
+    title: 'תבנית הוצאות',
+    columns: ['תאריך', 'סכום (כולל מע״מ)', 'תיאור', 'מספר חשבונית', 'פטור ממע״מ (true/false)', 'סטטוס (paid/pending)'],
+  },
+  bank: {
+    title: 'תבנית תנועות בנק',
+    columns: ['תאריך', 'סכום', 'תיאור', 'יתרה', 'שם הבנק', 'מספר חשבון'],
+  },
 }
 
 export function ExcelImport({ type, requiredFields, onImport, onClose }: ExcelImportProps) {
@@ -158,20 +179,55 @@ export function ExcelImport({ type, requiredFields, onImport, onClose }: ExcelIm
 
       {/* Step 1: Upload */}
       {step === 'upload' && (
-        <div
-          onClick={() => fileInputRef.current?.click()}
-          className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-primary-500 transition-colors"
-        >
-          <FileSpreadsheet className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-          <p className="text-gray-600 mb-2">גרור קובץ לכאן או לחץ לבחירה</p>
-          <p className="text-sm text-gray-400">Excel (.xlsx, .xls) או CSV</p>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            onChange={handleFileSelect}
-            className="hidden"
-          />
+        <div className="space-y-4">
+          {/* Template Download */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-medium text-blue-800">📥 הורד תבנית</h3>
+              <a
+                href={templateUrls[type]}
+                download
+                className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                הורד תבנית
+              </a>
+            </div>
+            <p className="text-sm text-blue-700 mb-2">
+              הורד את התבנית, מלא את הנתונים שלך, ואז העלה את הקובץ.
+            </p>
+            <div className="text-xs text-blue-600">
+              <strong>עמודות נדרשות:</strong> {templateInfo[type].columns.join(' | ')}
+            </div>
+          </div>
+
+          {/* File Drop Zone */}
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-primary-500 transition-colors"
+          >
+            <FileSpreadsheet className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+            <p className="text-gray-600 mb-2">גרור קובץ לכאן או לחץ לבחירה</p>
+            <p className="text-sm text-gray-400">Excel (.xlsx, .xls) או CSV</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+          </div>
+
+          {/* Tips */}
+          <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-600">
+            <h4 className="font-medium text-gray-800 mb-2">💡 טיפים לייבוא מוצלח:</h4>
+            <ul className="space-y-1 list-disc list-inside">
+              <li>השורה הראשונה צריכה להכיל כותרות עמודות</li>
+              <li>תאריכים בפורמט: YYYY-MM-DD או DD/MM/YYYY</li>
+              <li>סכומים כמספרים בלבד (ללא ₪)</li>
+              <li>סטטוס: paid (שולם) / pending (ממתין)</li>
+            </ul>
+          </div>
         </div>
       )}
 
