@@ -16,9 +16,9 @@ interface ExcelImportProps {
 }
 
 const templateUrls = {
-  income: '/templates/income-template.csv',
-  expense: '/templates/expenses-template.csv',
-  bank: '/templates/bank-template.csv',
+  income: '/templates/income-template.xlsx',
+  expense: '/templates/expenses-template.xlsx',
+  bank: '/templates/bank-template.xlsx',
 }
 
 const templateInfo = {
