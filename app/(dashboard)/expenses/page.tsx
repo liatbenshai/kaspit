@@ -292,7 +292,7 @@ export default function ExpensesPage() {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       {item.is_recurring && (
-                        <RotateCcw className="w-4 h-4 text-primary-500" title="הוצאה חוזרת" />
+                        <span title="הוצאה חוזרת"><RotateCcw className="w-4 h-4 text-primary-500" /></span>
                       )}
                       <div>
                         <p className="font-medium">{item.description || '-'}</p>
