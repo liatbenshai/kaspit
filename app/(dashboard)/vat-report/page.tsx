@@ -69,7 +69,7 @@ export default function VatReportPage() {
       // טעינת הכנסות
       const { data: incomeData } = await supabase
         .from('income')
-        .select('amount, amount_before_vat, vat_amount, vat_exempt')
+        .select('amount, amount_before_vat, vat_amount, vat_exempt, document_type')
         .eq('company_id', profile.company_id)
         .gte('date', startDate)
         .lte('date', endDate)
@@ -77,21 +77,26 @@ export default function VatReportPage() {
       // טעינת הוצאות
       const { data: expensesData } = await supabase
         .from('expenses')
-        .select('amount, amount_before_vat, vat_amount, vat_exempt, vat_deductible')
+        .select('amount, amount_before_vat, vat_amount, vat_exempt, vat_deductible, document_type')
         .eq('company_id', profile.company_id)
         .gte('date', startDate)
         .lte('date', endDate)
 
-      // חישוב סיכומים
+      // סוגי מסמכים שמחייבים/מאפשרים מע"מ
+      const vatDocTypes = ['tax_invoice', 'tax_invoice_receipt', 'credit_note']
+
+      // חישוב סיכומים - רק ממסמכי מס
+      const taxIncomeData = incomeData?.filter(i => vatDocTypes.includes(i.document_type)) || []
       const incomeBeforeVat = incomeData?.reduce((sum, i) => sum + Number(i.amount_before_vat || i.amount), 0) || 0
-      const incomeVat = incomeData?.reduce((sum, i) => sum + Number(i.vat_amount || 0), 0) || 0
+      const incomeVat = taxIncomeData.reduce((sum, i) => sum + Number(i.vat_amount || 0), 0)
       const incomeTotal = incomeData?.reduce((sum, i) => sum + Number(i.amount), 0) || 0
 
+      const taxExpenseData = expensesData?.filter(e => vatDocTypes.includes(e.document_type)) || []
       const expenseBeforeVat = expensesData?.reduce((sum, e) => sum + Number(e.amount_before_vat || e.amount), 0) || 0
-      const expenseVat = expensesData?.reduce((sum, e) => sum + Number(e.vat_amount || 0), 0) || 0
-      const expenseVatDeductible = expensesData
-        ?.filter(e => e.vat_deductible !== false && !e.vat_exempt)
-        .reduce((sum, e) => sum + Number(e.vat_amount || 0), 0) || 0
+      const expenseVat = taxExpenseData.reduce((sum, e) => sum + Number(e.vat_amount || 0), 0)
+      const expenseVatDeductible = taxExpenseData
+        .filter(e => e.vat_deductible !== false && !e.vat_exempt)
+        .reduce((sum, e) => sum + Number(e.vat_amount || 0), 0)
       const expenseTotal = expensesData?.reduce((sum, e) => sum + Number(e.amount), 0) || 0
 
       const vatToPay = incomeVat - expenseVatDeductible

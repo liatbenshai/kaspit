@@ -73,6 +73,21 @@ export interface Customer {
   created_at: string
 }
 
+// סוגי מסמכים - הכנסות
+export type IncomeDocumentType = 
+  | 'invoice'           // חשבונית עסקה
+  | 'tax_invoice'       // חשבונית מס
+  | 'tax_invoice_receipt' // חשבונית מס קבלה
+  | 'receipt'           // קבלה
+  | 'credit_note'       // הודעת זיכוי
+
+// סוגי מסמכים - הוצאות
+export type ExpenseDocumentType = 
+  | 'tax_invoice'       // חשבונית מס
+  | 'tax_invoice_receipt' // חשבונית מס קבלה
+  | 'receipt'           // קבלה
+  | 'credit_note'       // הודעת זיכוי
+
 // הכנסה
 export interface Income {
   id: string
@@ -83,6 +98,7 @@ export interface Income {
   amount_before_vat: number | null
   vat_amount: number | null
   vat_exempt: boolean
+  document_type: IncomeDocumentType
   date: string
   description: string | null
   invoice_number: string | null
@@ -106,6 +122,7 @@ export interface Expense {
   vat_amount: number | null
   vat_exempt: boolean
   vat_deductible: boolean
+  document_type: ExpenseDocumentType
   date: string
   description: string | null
   invoice_number: string | null
@@ -220,6 +237,7 @@ export interface IncomeFormData {
   amount_before_vat?: number
   vat_amount?: number
   vat_exempt?: boolean
+  document_type: IncomeDocumentType
   date: string
   description?: string
   invoice_number?: string
@@ -235,6 +253,7 @@ export interface ExpenseFormData {
   vat_amount?: number
   vat_exempt?: boolean
   vat_deductible?: boolean
+  document_type: ExpenseDocumentType
   date: string
   description?: string
   invoice_number?: string
