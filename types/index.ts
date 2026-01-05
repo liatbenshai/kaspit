@@ -88,6 +88,9 @@ export type ExpenseDocumentType =
   | 'receipt'           // קבלה
   | 'credit_note'       // הודעת זיכוי
 
+// סטטוס מסמך
+export type DocumentStatus = 'open' | 'closed' | 'cancelled'
+
 // הכנסה
 export interface Income {
   id: string
@@ -99,6 +102,8 @@ export interface Income {
   vat_amount: number | null
   vat_exempt: boolean
   document_type: IncomeDocumentType
+  document_status: DocumentStatus
+  linked_document_id: string | null
   date: string
   description: string | null
   invoice_number: string | null
@@ -109,6 +114,7 @@ export interface Income {
   // Relations
   category?: Category
   customer?: Customer
+  linked_document?: Income
 }
 
 // הוצאה

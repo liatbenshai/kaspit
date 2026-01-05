@@ -8,14 +8,15 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
+import { Alert } from '@/components/ui/Alert'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table'
 import { ExcelImport } from '@/components/import/ExcelImport'
 import { supabase } from '@/lib/supabase'
 import { formatCurrency, formatDateShort, translateStatus, getStatusColor } from '@/lib/utils'
-import { Plus, Upload, Search, Pencil, Trash2, FileText } from 'lucide-react'
-import type { Income, Category, Customer, IncomeDocumentType } from '@/types'
+import { Plus, Upload, Search, Pencil, Trash2, FileText, Link2, AlertTriangle } from 'lucide-react'
+import type { Income, Category, Customer, IncomeDocumentType, DocumentStatus } from '@/types'
 
-const VAT_RATE = 0.18 // 18% מע"מ
+const VAT_RATE = 0.18
 
 // סוגי מסמכים להכנסות
 const incomeDocumentTypes = [
@@ -26,13 +27,33 @@ const incomeDocumentTypes = [
   { value: 'credit_note', label: 'הודעת זיכוי' },
 ]
 
+const documentStatusLabels: Record<DocumentStatus, string> = {
+  open: 'פתוח',
+  closed: 'סגור',
+  cancelled: 'מבוטל',
+}
+
+const documentStatusColors: Record<DocumentStatus, string> = {
+  open: 'warning',
+  closed: 'success',
+  cancelled: 'default',
+}
+
 const getDocumentTypeLabel = (type: string) => {
   return incomeDocumentTypes.find(d => d.value === type)?.label || type
 }
 
-// האם סוג המסמך מחייב מע"מ
+// האם סוג המסמך מחייב מע"מ (נכלל בדוח מע"מ)
 const isVatDocument = (type: string) => {
   return ['tax_invoice', 'tax_invoice_receipt', 'credit_note'].includes(type)
+}
+
+// האם זו חשבונית עסקה שצריכה קישור
+const isBusinessInvoice = (type: string) => type === 'invoice'
+
+// האם מסמך יכול לסגור חשבונית עסקה
+const canCloseInvoice = (type: string) => {
+  return ['tax_invoice', 'tax_invoice_receipt'].includes(type)
 }
 
 export default function IncomePage() {
@@ -42,10 +63,13 @@ export default function IncomePage() {
   const [loading, setLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
+  const [showLinkModal, setShowLinkModal] = useState(false)
   const [editingIncome, setEditingIncome] = useState<Income | null>(null)
+  const [linkingDocument, setLinkingDocument] = useState<Income | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterDocType, setFilterDocType] = useState('')
+  const [filterDocStatus, setFilterDocStatus] = useState('')
   const [companyId, setCompanyId] = useState<string | null>(null)
 
   // Form state
@@ -57,6 +81,7 @@ export default function IncomePage() {
     amount: '',
     vat_exempt: false,
     document_type: 'tax_invoice' as IncomeDocumentType,
+    linked_document_id: '',
     date: new Date().toISOString().split('T')[0],
     description: '',
     invoice_number: '',
@@ -64,7 +89,6 @@ export default function IncomePage() {
     payment_date: '',
   })
 
-  // Input mode: 'before_vat' or 'total'
   const [inputMode, setInputMode] = useState<'before_vat' | 'total'>('before_vat')
 
   useEffect(() => {
@@ -73,7 +97,6 @@ export default function IncomePage() {
 
   // חישוב מע"מ אוטומטי
   useEffect(() => {
-    // אם פטור ממע"מ או סוג מסמך שלא מחייב מע"מ
     if (formData.vat_exempt || !isVatDocument(formData.document_type)) {
       setFormData(prev => ({
         ...prev,
@@ -155,6 +178,14 @@ export default function IncomePage() {
     if (!companyId) return
 
     try {
+      // קביעת סטטוס מסמך
+      let documentStatus: DocumentStatus = 'open'
+      if (isBusinessInvoice(formData.document_type)) {
+        documentStatus = 'open' // חשבונית עסקה תמיד מתחילה פתוחה
+      } else if (!isBusinessInvoice(formData.document_type)) {
+        documentStatus = 'closed' // מסמכי מס נחשבים סגורים
+      }
+
       const incomeData = {
         company_id: companyId,
         category_id: formData.category_id || null,
@@ -164,6 +195,8 @@ export default function IncomePage() {
         vat_amount: parseFloat(formData.vat_amount) || null,
         vat_exempt: formData.vat_exempt,
         document_type: formData.document_type,
+        document_status: documentStatus,
+        linked_document_id: formData.linked_document_id || null,
         date: formData.date,
         description: formData.description || null,
         invoice_number: formData.invoice_number || null,
@@ -177,7 +210,20 @@ export default function IncomePage() {
           .update(incomeData)
           .eq('id', editingIncome.id)
       } else {
-        await supabase.from('income').insert(incomeData)
+        // הוספת מסמך חדש
+        const { data: newIncome } = await supabase
+          .from('income')
+          .insert(incomeData)
+          .select()
+          .single()
+
+        // אם זה מסמך שסוגר חשבונית עסקה
+        if (newIncome && formData.linked_document_id && canCloseInvoice(formData.document_type)) {
+          await supabase
+            .from('income')
+            .update({ document_status: 'closed' })
+            .eq('id', formData.linked_document_id)
+        }
       }
 
       setShowAddModal(false)
@@ -186,6 +232,28 @@ export default function IncomePage() {
       loadData()
     } catch (error) {
       console.error('Error saving income:', error)
+    }
+  }
+
+  const handleLinkDocument = async (businessInvoiceId: string, taxDocumentId: string) => {
+    try {
+      // עדכון חשבונית המס עם הקישור
+      await supabase
+        .from('income')
+        .update({ linked_document_id: businessInvoiceId })
+        .eq('id', taxDocumentId)
+
+      // סגירת חשבונית העסקה
+      await supabase
+        .from('income')
+        .update({ document_status: 'closed' })
+        .eq('id', businessInvoiceId)
+
+      setShowLinkModal(false)
+      setLinkingDocument(null)
+      loadData()
+    } catch (error) {
+      console.error('Error linking documents:', error)
     }
   }
 
@@ -199,6 +267,7 @@ export default function IncomePage() {
       amount: String(item.amount),
       vat_exempt: item.vat_exempt || false,
       document_type: item.document_type || 'tax_invoice',
+      linked_document_id: item.linked_document_id || '',
       date: item.date,
       description: item.description || '',
       invoice_number: item.invoice_number || '',
@@ -209,7 +278,7 @@ export default function IncomePage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('האם למחוק הכנסה זו?')) return
+    if (!confirm('האם למחוק מסמך זה?')) return
     await supabase.from('income').delete().eq('id', id)
     loadData()
   }
@@ -232,6 +301,7 @@ export default function IncomePage() {
         vat_amount: vatAmount,
         vat_exempt: vatExempt,
         document_type: docType,
+        document_status: isBusinessInvoice(docType) ? 'open' : 'closed',
         date: row.date || new Date().toISOString().split('T')[0],
         description: row.description || null,
         invoice_number: row.invoice_number || null,
@@ -253,6 +323,7 @@ export default function IncomePage() {
       amount: '',
       vat_exempt: false,
       document_type: 'tax_invoice',
+      linked_document_id: '',
       date: new Date().toISOString().split('T')[0],
       description: '',
       invoice_number: '',
@@ -270,11 +341,24 @@ export default function IncomePage() {
     
     const matchesStatus = !filterStatus || item.payment_status === filterStatus
     const matchesDocType = !filterDocType || item.document_type === filterDocType
-    return matchesSearch && matchesStatus && matchesDocType
+    const matchesDocStatus = !filterDocStatus || item.document_status === filterDocStatus
+    return matchesSearch && matchesStatus && matchesDocType && matchesDocStatus
   })
 
+  // חשבוניות עסקה פתוחות
+  const openBusinessInvoices = income.filter(
+    i => i.document_type === 'invoice' && i.document_status === 'open'
+  )
+
+  // חשבוניות מס שיכולות לסגור חשבונית עסקה (ללא קישור)
+  const unlinkedTaxDocuments = income.filter(
+    i => canCloseInvoice(i.document_type) && !i.linked_document_id
+  )
+
   const totalAmount = filteredIncome.reduce((sum, item) => sum + Number(item.amount), 0)
-  const totalVat = filteredIncome.reduce((sum, item) => sum + Number(item.vat_amount || 0), 0)
+  const totalVat = filteredIncome
+    .filter(i => isVatDocument(i.document_type))
+    .reduce((sum, item) => sum + Number(item.vat_amount || 0), 0)
   const totalBeforeVat = filteredIncome.reduce((sum, item) => sum + Number(item.amount_before_vat || item.amount), 0)
 
   if (loading) {
@@ -289,7 +373,7 @@ export default function IncomePage() {
     <div className="space-y-6">
       <PageHeader
         title="הכנסות"
-        description="ניהול ומעקב הכנסות"
+        description="ניהול ומעקב הכנסות ומסמכים"
         actions={
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setShowImportModal(true)}>
@@ -298,11 +382,23 @@ export default function IncomePage() {
             </Button>
             <Button onClick={() => setShowAddModal(true)}>
               <Plus className="w-4 h-4" />
-              הוספת הכנסה
+              הוספת מסמך
             </Button>
           </div>
         }
       />
+
+      {/* Alert for open business invoices */}
+      {openBusinessInvoices.length > 0 && (
+        <Alert variant="warning">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5" />
+            <span>
+              יש {openBusinessInvoices.length} חשבוניות עסקה פתוחות שטרם הומרו לחשבונית מס
+            </span>
+          </div>
+        </Alert>
+      )}
 
       {/* Filters */}
       <Card padding="md">
@@ -311,7 +407,7 @@ export default function IncomePage() {
             <div className="relative">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
-                placeholder="חיפוש לפי תיאור, מספר חשבונית או לקוח..."
+                placeholder="חיפוש לפי תיאור, מספר מסמך או לקוח..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pr-10"
@@ -329,6 +425,16 @@ export default function IncomePage() {
           <Select
             options={[
               { value: '', label: 'כל הסטטוסים' },
+              { value: 'open', label: 'פתוח' },
+              { value: 'closed', label: 'סגור' },
+              { value: 'cancelled', label: 'מבוטל' },
+            ]}
+            value={filterDocStatus}
+            onChange={(e) => setFilterDocStatus(e.target.value)}
+          />
+          <Select
+            options={[
+              { value: '', label: 'כל סטטוסי התשלום' },
               { value: 'pending', label: 'ממתין' },
               { value: 'partial', label: 'שולם חלקית' },
               { value: 'paid', label: 'שולם' },
@@ -339,20 +445,20 @@ export default function IncomePage() {
         </div>
       </Card>
 
-      {/* Summary with VAT */}
+      {/* Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
           <p className="text-sm text-gray-500">לפני מע״מ</p>
           <p className="text-xl font-bold text-gray-900">{formatCurrency(totalBeforeVat)}</p>
         </div>
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm text-blue-600">מע״מ (18%)</p>
+          <p className="text-sm text-blue-600">מע״מ עסקאות (מחשבוניות מס)</p>
           <p className="text-xl font-bold text-blue-700">{formatCurrency(totalVat)}</p>
         </div>
         <div className="bg-success-50 border border-success-200 rounded-lg p-4">
-          <p className="text-sm text-success-600">סה״כ כולל מע״מ</p>
+          <p className="text-sm text-success-600">סה״כ</p>
           <p className="text-xl font-bold text-success-700">{formatCurrency(totalAmount)}</p>
-          <p className="text-xs text-success-600">{filteredIncome.length} הכנסות</p>
+          <p className="text-xs text-success-600">{filteredIncome.length} מסמכים</p>
         </div>
       </div>
 
@@ -363,13 +469,13 @@ export default function IncomePage() {
             <TableRow>
               <TableHead>תאריך</TableHead>
               <TableHead>סוג מסמך</TableHead>
+              <TableHead>מס׳</TableHead>
               <TableHead>תיאור</TableHead>
-              <TableHead>קטגוריה</TableHead>
               <TableHead>לקוח</TableHead>
-              <TableHead>לפני מע״מ</TableHead>
+              <TableHead>סכום</TableHead>
               <TableHead>מע״מ</TableHead>
-              <TableHead>סה״כ</TableHead>
-              <TableHead>סטטוס</TableHead>
+              <TableHead>סטטוס מסמך</TableHead>
+              <TableHead>תשלום</TableHead>
               <TableHead>פעולות</TableHead>
             </TableRow>
           </TableHeader>
@@ -377,12 +483,12 @@ export default function IncomePage() {
             {filteredIncome.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={10} className="text-center py-8 text-gray-500">
-                  אין הכנסות להצגה
+                  אין מסמכים להצגה
                 </TableCell>
               </TableRow>
             ) : (
               filteredIncome.map((item) => (
-                <TableRow key={item.id}>
+                <TableRow key={item.id} className={item.document_status === 'cancelled' ? 'opacity-50' : ''}>
                   <TableCell>{formatDateShort(item.date)}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
@@ -390,38 +496,31 @@ export default function IncomePage() {
                       <span className="text-sm">{getDocumentTypeLabel(item.document_type)}</span>
                     </div>
                   </TableCell>
+                  <TableCell className="font-mono text-sm">{item.invoice_number || '-'}</TableCell>
                   <TableCell>
                     <div>
                       <p className="font-medium">{item.description || '-'}</p>
-                      {item.invoice_number && (
-                        <p className="text-xs text-gray-500">מס׳: {item.invoice_number}</p>
-                      )}
-                      {item.vat_exempt && (
-                        <Badge variant="default" size="sm">פטור ממע״מ</Badge>
+                      {item.linked_document_id && (
+                        <p className="text-xs text-primary-600 flex items-center gap-1">
+                          <Link2 className="w-3 h-3" />
+                          מקושר לחשבונית עסקה
+                        </p>
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>
-                    {item.category ? (
-                      <span
-                        className="inline-flex items-center gap-1 text-sm"
-                        style={{ color: item.category.color }}
-                      >
-                        <span
-                          className="w-2 h-2 rounded-full"
-                          style={{ backgroundColor: item.category.color }}
-                        />
-                        {item.category.name}
-                      </span>
-                    ) : '-'}
-                  </TableCell>
                   <TableCell>{item.customer?.name || '-'}</TableCell>
-                  <TableCell>{formatCurrency(item.amount_before_vat || item.amount)}</TableCell>
-                  <TableCell className="text-blue-600">
-                    {item.vat_amount ? formatCurrency(item.vat_amount) : '-'}
-                  </TableCell>
-                  <TableCell className="font-semibold text-success-600">
+                  <TableCell className="font-semibold">
                     {formatCurrency(item.amount)}
+                  </TableCell>
+                  <TableCell className="text-blue-600">
+                    {isVatDocument(item.document_type) && item.vat_amount 
+                      ? formatCurrency(item.vat_amount) 
+                      : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={documentStatusColors[item.document_status] as any}>
+                      {documentStatusLabels[item.document_status]}
+                    </Badge>
                   </TableCell>
                   <TableCell>
                     <Badge variant={getStatusColor(item.payment_status) as any}>
@@ -430,6 +529,19 @@ export default function IncomePage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
+                      {/* Link button for open business invoices */}
+                      {isBusinessInvoice(item.document_type) && item.document_status === 'open' && (
+                        <button
+                          onClick={() => {
+                            setLinkingDocument(item)
+                            setShowLinkModal(true)
+                          }}
+                          className="p-1 text-primary-500 hover:text-primary-700"
+                          title="קשר לחשבונית מס"
+                        >
+                          <Link2 className="w-4 h-4" />
+                        </button>
+                      )}
                       <button
                         onClick={() => handleEdit(item)}
                         className="p-1 text-gray-400 hover:text-primary-600"
@@ -459,7 +571,7 @@ export default function IncomePage() {
           setEditingIncome(null)
           resetForm()
         }}
-        title={editingIncome ? 'עריכת הכנסה' : 'הוספת הכנסה'}
+        title={editingIncome ? 'עריכת מסמך' : 'הוספת מסמך'}
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -471,6 +583,29 @@ export default function IncomePage() {
             onChange={(e) => setFormData({ ...formData, document_type: e.target.value as IncomeDocumentType })}
             required
           />
+
+          {/* Link to business invoice - only for tax documents */}
+          {canCloseInvoice(formData.document_type) && openBusinessInvoices.length > 0 && !editingIncome && (
+            <Select
+              label="קישור לחשבונית עסקה (אופציונלי)"
+              options={[
+                { value: '', label: 'ללא קישור' },
+                ...openBusinessInvoices.map(inv => ({
+                  value: inv.id,
+                  label: `${inv.invoice_number || 'ללא מספר'} - ${inv.description || ''} - ${formatCurrency(inv.amount)}`
+                }))
+              ]}
+              value={formData.linked_document_id}
+              onChange={(e) => setFormData({ ...formData, linked_document_id: e.target.value })}
+            />
+          )}
+
+          {/* Info about document type */}
+          {isBusinessInvoice(formData.document_type) && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+              💡 חשבונית עסקה לא נכללת בדוח המע״מ. יש להמיר אותה לחשבונית מס בעת קבלת התשלום.
+            </div>
+          )}
 
           {/* VAT Input Mode Toggle - Only for VAT documents */}
           {isVatDocument(formData.document_type) && (
@@ -573,7 +708,7 @@ export default function IncomePage() {
             label="תיאור"
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            placeholder="תיאור ההכנסה"
+            placeholder="תיאור המסמך"
           />
 
           <div className="grid grid-cols-2 gap-4">
@@ -642,6 +777,66 @@ export default function IncomePage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Link Document Modal */}
+      <Modal
+        isOpen={showLinkModal}
+        onClose={() => {
+          setShowLinkModal(false)
+          setLinkingDocument(null)
+        }}
+        title="קישור חשבונית עסקה לחשבונית מס"
+      >
+        {linkingDocument && (
+          <div className="space-y-4">
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h4 className="font-medium mb-2">חשבונית עסקה:</h4>
+              <p>מספר: {linkingDocument.invoice_number || 'ללא'}</p>
+              <p>תיאור: {linkingDocument.description || '-'}</p>
+              <p>סכום: {formatCurrency(linkingDocument.amount)}</p>
+            </div>
+
+            <div>
+              <h4 className="font-medium mb-2">בחר חשבונית מס לקישור:</h4>
+              {unlinkedTaxDocuments.length === 0 ? (
+                <p className="text-gray-500">אין חשבוניות מס זמינות לקישור</p>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {unlinkedTaxDocuments.map(doc => (
+                    <button
+                      key={doc.id}
+                      onClick={() => handleLinkDocument(linkingDocument.id, doc.id)}
+                      className="w-full text-right p-3 border rounded-lg hover:bg-primary-50 hover:border-primary-300 transition-colors"
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">{getDocumentTypeLabel(doc.document_type)}</span>
+                        <span className="text-success-600 font-bold">{formatCurrency(doc.amount)}</span>
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {doc.invoice_number && <span>מס׳ {doc.invoice_number} | </span>}
+                        {formatDateShort(doc.date)}
+                        {doc.description && <span> | {doc.description}</span>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowLinkModal(false)
+                  setLinkingDocument(null)
+                }}
+              >
+                ביטול
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Import Modal */}

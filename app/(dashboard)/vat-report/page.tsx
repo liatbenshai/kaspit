@@ -85,19 +85,19 @@ export default function VatReportPage() {
       // סוגי מסמכים שמחייבים/מאפשרים מע"מ
       const vatDocTypes = ['tax_invoice', 'tax_invoice_receipt', 'credit_note']
 
-      // חישוב סיכומים - רק ממסמכי מס
+      // חישוב סיכומים - רק ממסמכי מס (לא כולל חשבוניות עסקה)
       const taxIncomeData = incomeData?.filter(i => vatDocTypes.includes(i.document_type)) || []
-      const incomeBeforeVat = incomeData?.reduce((sum, i) => sum + Number(i.amount_before_vat || i.amount), 0) || 0
+      const incomeBeforeVat = taxIncomeData.reduce((sum, i) => sum + Number(i.amount_before_vat || i.amount), 0)
       const incomeVat = taxIncomeData.reduce((sum, i) => sum + Number(i.vat_amount || 0), 0)
-      const incomeTotal = incomeData?.reduce((sum, i) => sum + Number(i.amount), 0) || 0
+      const incomeTotal = taxIncomeData.reduce((sum, i) => sum + Number(i.amount), 0)
 
       const taxExpenseData = expensesData?.filter(e => vatDocTypes.includes(e.document_type)) || []
-      const expenseBeforeVat = expensesData?.reduce((sum, e) => sum + Number(e.amount_before_vat || e.amount), 0) || 0
+      const expenseBeforeVat = taxExpenseData.reduce((sum, e) => sum + Number(e.amount_before_vat || e.amount), 0)
       const expenseVat = taxExpenseData.reduce((sum, e) => sum + Number(e.vat_amount || 0), 0)
       const expenseVatDeductible = taxExpenseData
         .filter(e => e.vat_deductible !== false && !e.vat_exempt)
         .reduce((sum, e) => sum + Number(e.vat_amount || 0), 0)
-      const expenseTotal = expensesData?.reduce((sum, e) => sum + Number(e.amount), 0) || 0
+      const expenseTotal = taxExpenseData.reduce((sum, e) => sum + Number(e.amount), 0)
 
       const vatToPay = incomeVat - expenseVatDeductible
 
@@ -105,12 +105,12 @@ export default function VatReportPage() {
         income_before_vat: incomeBeforeVat,
         income_vat: incomeVat,
         income_total: incomeTotal,
-        income_count: incomeData?.length || 0,
+        income_count: taxIncomeData.length,
         expense_before_vat: expenseBeforeVat,
         expense_vat: expenseVat,
         expense_vat_deductible: expenseVatDeductible,
         expense_total: expenseTotal,
-        expense_count: expensesData?.length || 0,
+        expense_count: taxExpenseData.length,
         vat_to_pay: vatToPay,
       })
 
@@ -314,9 +314,14 @@ export default function VatReportPage() {
       </Card>
 
       {/* Info Note */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 space-y-2">
         <p className="text-sm text-yellow-800">
           <strong>שימו לב:</strong> דוח זה מיועד לסיוע בחישוב בלבד. יש לוודא את הנתונים מול רואה החשבון לפני הגשת הדוח לרשויות.
+        </p>
+        <p className="text-sm text-yellow-700">
+          <strong>מסמכים הנכללים בדוח:</strong> חשבוניות מס, חשבוניות מס קבלה, והודעות זיכוי בלבד.
+          <br />
+          חשבוניות עסקה וקבלות אינן נכללות בחישוב המע״מ.
         </p>
       </div>
     </div>
