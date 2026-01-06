@@ -43,6 +43,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: ['Heebo', 'sans-serif'],
+        heebo: ['Heebo', 'sans-serif'],
       },
     },
   },

@@ -22,6 +22,7 @@ export function ExpenseForm({ initialData, onSubmit, onCancel }: ExpenseFormProp
     category_id: initialData?.category_id || '',
     supplier_id: initialData?.supplier_id || '',
     amount: initialData?.amount || 0,
+    document_type: initialData?.document_type || 'tax_invoice',
     date: initialData?.date || new Date().toISOString().split('T')[0],
     description: initialData?.description || '',
     invoice_number: initialData?.invoice_number || '',

@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card'
 import { Alert } from '@/components/ui/Alert'
 import { Select } from '@/components/ui/Select'
 import { Upload, FileSpreadsheet, X, Check, Download } from 'lucide-react'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 
 interface ExcelImportProps {
   type: 'income' | 'expense' | 'bank'
@@ -87,24 +87,63 @@ export function ExcelImport({ type, requiredFields, onImport, onClose }: ExcelIm
     }
   }
 
-  const readExcelFile = (file: File): Promise<any[]> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        try {
-          const data = e.target?.result
-          const workbook = XLSX.read(data, { type: 'binary', cellDates: true })
-          const sheetName = workbook.SheetNames[0]
-          const sheet = workbook.Sheets[sheetName]
-          const json = XLSX.utils.sheet_to_json(sheet)
-          resolve(json)
-        } catch (err) {
-          reject(err)
-        }
-      }
-      reader.onerror = reject
-      reader.readAsBinaryString(file)
+  const readExcelFile = async (file: File): Promise<any[]> => {
+    const arrayBuffer = await file.arrayBuffer()
+    const workbook = new ExcelJS.Workbook()
+    
+    if (file.name.endsWith('.csv')) {
+      // Handle CSV files
+      const text = new TextDecoder().decode(arrayBuffer)
+      const lines = text.split('\n').filter(line => line.trim())
+      if (lines.length === 0) return []
+      
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
+      return lines.slice(1).map(line => {
+        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''))
+        const row: Record<string, any> = {}
+        headers.forEach((header, i) => {
+          row[header] = values[i] || ''
+        })
+        return row
+      })
+    }
+    
+    // Handle Excel files
+    await workbook.xlsx.load(arrayBuffer)
+    const worksheet = workbook.worksheets[0]
+    
+    if (!worksheet || worksheet.rowCount === 0) return []
+    
+    const headers: string[] = []
+    const headerRow = worksheet.getRow(1)
+    headerRow.eachCell((cell, colNumber) => {
+      headers[colNumber - 1] = String(cell.value || `Column${colNumber}`)
     })
+    
+    const data: any[] = []
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return // Skip header row
+      
+      const rowData: Record<string, any> = {}
+      row.eachCell((cell, colNumber) => {
+        const header = headers[colNumber - 1]
+        if (header) {
+          // Handle date values
+          if (cell.value instanceof Date) {
+            rowData[header] = cell.value.toISOString().split('T')[0]
+          } else {
+            rowData[header] = cell.value
+          }
+        }
+      })
+      
+      // Only add rows that have at least one value
+      if (Object.keys(rowData).length > 0) {
+        data.push(rowData)
+      }
+    })
+    
+    return data
   }
 
   const handleMappingChange = (fieldKey: string, excelHeader: string) => {

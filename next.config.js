@@ -9,6 +9,8 @@ const nextConfig = {
       },
     ],
   },
+  // Disable static export for dynamic pages that require auth
+  output: 'standalone',
 }
 
 module.exports = nextConfig

@@ -1,10 +1,4 @@
 import './globals.css'
-import { Heebo } from 'next/font/google'
-
-const heebo = Heebo({ 
-  subsets: ['hebrew', 'latin'],
-  display: 'swap',
-})
 
 export const metadata = {
   title: 'כספית - ניהול פיננסי חכם',
@@ -18,7 +12,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="he" dir="rtl">
-      <body className={heebo.className}>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link 
+          href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700&display=swap" 
+          rel="stylesheet"
+        />
+      </head>
+      <body className="font-heebo">
         {children}
       </body>
     </html>

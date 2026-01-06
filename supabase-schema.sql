@@ -17,6 +17,8 @@ create table companies (
   phone text,
   email text,
   tax_id text,
+  vat_rate numeric(5,2) default 18.00,
+  vat_reporting_period text default 'monthly' check (vat_reporting_period in ('monthly', 'bimonthly')),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -94,6 +96,12 @@ create table income (
   category_id uuid references categories(id) on delete set null,
   customer_id uuid references customers(id) on delete set null,
   amount decimal(15,2) not null,
+  amount_before_vat decimal(15,2),
+  vat_amount decimal(15,2),
+  vat_exempt boolean default false,
+  document_type text default 'tax_invoice' check (document_type in ('invoice', 'tax_invoice', 'tax_invoice_receipt', 'receipt', 'credit_note')),
+  document_status text default 'open' check (document_status in ('open', 'closed', 'cancelled')),
+  linked_document_id uuid references income(id) on delete set null,
   date date not null,
   description text,
   invoice_number text,
@@ -112,6 +120,11 @@ create table expenses (
   category_id uuid references categories(id) on delete set null,
   supplier_id uuid references suppliers(id) on delete set null,
   amount decimal(15,2) not null,
+  amount_before_vat decimal(15,2),
+  vat_amount decimal(15,2),
+  vat_exempt boolean default false,
+  vat_deductible boolean default true,
+  document_type text default 'tax_invoice' check (document_type in ('tax_invoice', 'tax_invoice_receipt', 'receipt', 'credit_note')),
   date date not null,
   description text,
   invoice_number text,
