@@ -24,11 +24,11 @@ const templateUrls = {
 const templateInfo = {
   income: {
     title: 'תבנית הכנסות',
-    columns: ['תאריך', 'סכום (כולל מע״מ)', 'תיאור', 'מספר חשבונית', 'פטור ממע״מ (true/false)', 'סטטוס (paid/pending)'],
+    columns: ['תאריך', 'סכום (לפני מע״מ)', 'תיאור', 'מספר חשבונית', 'פטור ממע״מ (true/false)', 'סטטוס (paid/pending)'],
   },
   expense: {
     title: 'תבנית הוצאות',
-    columns: ['תאריך', 'סכום (כולל מע״מ)', 'תיאור', 'מספר חשבונית', 'פטור ממע״מ (true/false)', 'סטטוס (paid/pending)'],
+    columns: ['תאריך', 'סכום (לפני מע״מ)', 'תיאור', 'מספר חשבונית', 'פטור ממע״מ (true/false)', 'סטטוס (paid/pending)'],
   },
   bank: {
     title: 'תבנית תנועות בנק',

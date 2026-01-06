@@ -287,12 +287,12 @@ export default function IncomePage() {
     if (!companyId) return
 
     const incomeRecords = data.map(row => {
-      const amount = parseFloat(row.amount) || 0
+      const amountBeforeVat = parseFloat(row.amount_before_vat) || 0
       const vatExempt = row.vat_exempt === 'true' || row.vat_exempt === true
       const docType = row.document_type || 'tax_invoice'
       const hasVat = !vatExempt && isVatDocument(docType)
-      const amountBeforeVat = hasVat ? Math.round((amount / (1 + VAT_RATE)) * 100) / 100 : amount
-      const vatAmount = hasVat ? Math.round((amount - amountBeforeVat) * 100) / 100 : 0
+      const vatAmount = hasVat ? Math.round(amountBeforeVat * VAT_RATE * 100) / 100 : 0
+      const amount = Math.round((amountBeforeVat + vatAmount) * 100) / 100
 
       return {
         company_id: companyId,
@@ -848,7 +848,7 @@ export default function IncomePage() {
         <ExcelImport
           type="income"
           requiredFields={[
-            { key: 'amount', label: 'סכום (כולל מע״מ)', required: true },
+            { key: 'amount_before_vat', label: 'סכום (לפני מע״מ)', required: true },
             { key: 'date', label: 'תאריך', required: true },
             { key: 'document_type', label: 'סוג מסמך', required: false },
             { key: 'description', label: 'תיאור', required: false },
