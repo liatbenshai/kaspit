@@ -7,6 +7,7 @@
  */
 
 import { WORK_HOURS, HOME_HOURS, getScheduleByType } from '../config/workSchedule';
+import { getTaskType } from '../config/taskTypes';
 import { toLocalISODate } from './dateHelpers';
 
 // ============================================
@@ -219,9 +220,22 @@ function scheduleFlexibleTasks(sortedTasks, days, todayISO, config) {
   
   // ✅ פונקציה לבדיקה אם משימה היא בית/משפחה
   const isHomeTask = (task) => {
+    // בדיקה ראשונה: קטגוריה ישירה על המשימה
     const category = task.category || '';
+    if (homeCategories.includes(category)) {
+      return true;
+    }
+    
+    // בדיקה שנייה: קבלת הקטגוריה מתוך הגדרות סוג המשימה
     const taskType = task.task_type || '';
-    return homeCategories.includes(category) || homeCategories.includes(taskType);
+    if (taskType) {
+      const typeConfig = getTaskType(taskType);
+      if (typeConfig && homeCategories.includes(typeConfig.category)) {
+        return true;
+      }
+    }
+    
+    return false;
   };
   
   // ✅ מעקב אחרי הזמן הבא הפנוי בכל יום - עבודה ובית בנפרד
