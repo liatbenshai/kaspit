@@ -29,9 +29,59 @@ let draggedTaskData = null;
  */
 const WORK_HOURS = {
   start: 8.5, // 08:30
-  end: 16,  // 16:00
+  end: 16.25,  // 16:15
   totalMinutes: 7.75 * 60 // 465 דקות
 };
+
+/**
+ * שעות בית/משפחה
+ */
+const HOME_HOURS = {
+  start: 17, // 17:00
+  end: 21,   // 21:00
+  totalMinutes: 4 * 60 // 240 דקות
+};
+
+/**
+ * שעות בית בסופ"ש (גמיש)
+ */
+const WEEKEND_HOME_HOURS = {
+  start: 8,  // 08:00
+  end: 22,   // 22:00
+  totalMinutes: 14 * 60 // 840 דקות
+};
+
+/**
+ * קבלת שעות היום לפי תאריך
+ */
+function getDaySchedule(date) {
+  const dayOfWeek = date.getDay();
+  const isWeekend = dayOfWeek === 5 || dayOfWeek === 6; // שישי או שבת
+  
+  if (isWeekend) {
+    return {
+      type: 'home',
+      label: 'שעות בית',
+      hours: WEEKEND_HOME_HOURS,
+      startStr: '08:00',
+      endStr: '22:00',
+      isWorkDay: false,
+      isHomeDay: true
+    };
+  }
+  
+  // ימים א'-ה' - יש גם עבודה וגם בית
+  return {
+    type: 'work',
+    label: 'שעות עבודה',
+    hours: WORK_HOURS,
+    startStr: '08:30',
+    endStr: '16:15',
+    isWorkDay: true,
+    isHomeDay: true,
+    homeHours: HOME_HOURS
+  };
+}
 
 /**
  * המרה לתאריך עברי
@@ -356,10 +406,14 @@ function DailyView() {
       .filter(b => !b.isCompleted && (b.task?.time_spent || b.timeSpent || 0) > 0)
       .reduce((sum, b) => sum + (b.task?.time_spent || b.timeSpent || 0), 0);
     
-    const endOfDayMinutes = WORK_HOURS.end * 60;
+    // ✅ תיקון: שימוש בשעות דינמיות לפי היום
+    const daySchedule = getDaySchedule(selectedDate);
+    const dayHours = daySchedule.hours;
+    
+    const endOfDayMinutes = dayHours.end * 60;
     const minutesLeftInDay = isViewingToday 
       ? Math.max(0, endOfDayMinutes - currentTime.minutes)
-      : WORK_HOURS.totalMinutes;
+      : dayHours.totalMinutes;
     
     // ✅ תיקון: אחרי שתיקנו את pendingMinutes לחשב זמן שנותר, החישוב פשוט יותר
     // pendingMinutes כבר מכיל את הזמן שנותר (estimated - spent), לא צריך להוסיף inProgressMinutes
@@ -372,11 +426,11 @@ function DailyView() {
       inProgress: inProgressMinutes,
       remaining: freeMinutes,
       minutesLeftInDay: minutesLeftInDay,
-      total: WORK_HOURS.totalMinutes,
-      usedPercent: Math.round((completedMinutes / WORK_HOURS.totalMinutes) * 100),
+      total: dayHours.totalMinutes,
+      usedPercent: Math.round((completedMinutes / dayHours.totalMinutes) * 100),
       canFitAll: pendingMinutes <= minutesLeftInDay
     };
-  }, [selectedDayData, isViewingToday, currentTime.minutes]);
+  }, [selectedDayData, isViewingToday, currentTime.minutes, selectedDate]);
 
   const handleAddTask = () => {
     setEditingTask(null);
@@ -541,9 +595,10 @@ function DailyView() {
         .filter(block => block && !block.isFromGoogle && !block.is_from_google && !block.isGoogleEvent);
       
       // חישוב זמנים חדשים
+      const daySchedule = getDaySchedule(selectedDate);
       let nextStartMinutes = isViewingToday 
         ? currentTime.minutes 
-        : WORK_HOURS.start * 60;
+        : daySchedule.hours.start * 60;
       
       // עדכון כל משימה עם הזמן החדש שלה
       for (const block of regularBlocksInNewOrder) {
@@ -708,7 +763,9 @@ function DailyView() {
     return proposedStart;
   };
   
-  let nextStartMinutes = isViewingToday ? currentTime.minutes : WORK_HOURS.start * 60;
+  // ✅ תיקון: שימוש בשעות דינמיות לפי היום
+  const currentDaySchedule = getDaySchedule(selectedDate);
+  let nextStartMinutes = isViewingToday ? currentTime.minutes : currentDaySchedule.hours.start * 60;
   
   const rescheduledRegularBlocks = sortedRegularBlocks.map(block => {
     const duration = block.duration || 30;
@@ -888,7 +945,10 @@ function DailyView() {
         </div>
         
         <p className="text-center text-gray-500 dark:text-gray-400 mt-2 text-sm">
-          שעות עבודה: 08:30 - 16:00
+          {(() => {
+            const schedule = getDaySchedule(selectedDate);
+            return `${schedule.label}: ${schedule.startStr} - ${schedule.endStr}`;
+          })()}
         </p>
       </motion.div>
 
@@ -948,7 +1008,7 @@ function DailyView() {
         {rescheduleInfo && rescheduleInfo.tasksToMoveToTomorrow.length > 0 && (
           <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-700">
             <div className="text-red-700 dark:text-red-400 text-sm font-medium mb-2">
-              ⚠️ לא יספיק! צריך {formatMinutes(rescheduleInfo.timeNeededToday + rescheduleInfo.tasksToMoveToTomorrow.reduce((sum, t) => sum + (t.estimated_duration || 30), 0))} אבל נשארו רק {formatMinutes(rescheduleInfo.remainingWorkToday)} בשעות העבודה
+              ⚠️ לא יספיק! צריך {formatMinutes(rescheduleInfo.timeNeededToday + rescheduleInfo.tasksToMoveToTomorrow.reduce((sum, t) => sum + (t.estimated_duration || 30), 0))} אבל נשארו רק {formatMinutes(rescheduleInfo.remainingWorkToday)} ב{getDaySchedule(selectedDate).label}
             </div>
             
             <div className="text-xs text-red-600 dark:text-red-300 mb-2">
@@ -985,11 +1045,11 @@ function DailyView() {
           </div>
         )}
         
-        {/* ✅ חדש: התראה על משימות שחורגות מ-16:00 (גם דחופות!) */}
+        {/* ✅ חדש: התראה על משימות שחורגות מסוף היום */}
         {rescheduleInfo && rescheduleInfo.tasksOverflowingEndOfDay && rescheduleInfo.tasksOverflowingEndOfDay.length > 0 && (
           <div className="mt-3 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-700">
             <div className="text-orange-700 dark:text-orange-400 text-sm font-medium mb-2">
-              ⏰ {rescheduleInfo.tasksOverflowingEndOfDay.length} משימות חורגות מ-16:00!
+              ⏰ {rescheduleInfo.tasksOverflowingEndOfDay.length} משימות חורגות מ-{getDaySchedule(selectedDate).endStr}!
             </div>
             
             <div className="text-xs text-orange-600 dark:text-orange-300 mb-2">
@@ -1003,7 +1063,7 @@ function DailyView() {
                     </span>
                     <span>{task.title}</span>
                     <span className="text-orange-500">
-                      (+{task.overflowMinutes} דק' אחרי 16:00)
+                      (+{task.overflowMinutes} דק' אחרי {getDaySchedule(selectedDate).endStr})
                     </span>
                   </li>
                 ))}
@@ -1078,11 +1138,23 @@ function DailyView() {
             onDrop={handleDropOnTimeline}
           >
             <div className="h-full flex flex-col justify-between py-2 text-xs text-gray-500 dark:text-gray-400">
-              <span className="text-center">08:30</span>
-              <span className="text-center">10:00</span>
-              <span className="text-center">12:00</span>
-              <span className="text-center">14:00</span>
-              <span className="text-center">16:00</span>
+              {(() => {
+                const schedule = getDaySchedule(selectedDate);
+                const startHour = schedule.hours.start;
+                const endHour = schedule.hours.end;
+                const totalHours = endHour - startHour;
+                const step = totalHours / 4; // 4 נקודות ביניים
+                const times = [];
+                for (let i = 0; i <= 4; i++) {
+                  const hour = startHour + (step * i);
+                  const h = Math.floor(hour);
+                  const m = Math.round((hour - h) * 60);
+                  times.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+                }
+                return times.map((time, i) => (
+                  <span key={i} className="text-center">{time}</span>
+                ));
+              })()}
             </div>
             
             {dragOverTime && (
