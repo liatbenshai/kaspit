@@ -226,13 +226,46 @@ export default function ExpensesPage() {
     loadData()
   }
 
+  // מיפוי ערכים מעברית לאנגלית
+  const documentTypeMap: Record<string, string> = {
+    'חשבונית מס': 'tax_invoice',
+    'חשבונית מס קבלה': 'tax_invoice_receipt',
+    'הודעת זיכוי': 'credit_note',
+    'קבלה': 'receipt',
+    'tax_invoice': 'tax_invoice',
+    'tax_invoice_receipt': 'tax_invoice_receipt',
+    'credit_note': 'credit_note',
+    'receipt': 'receipt',
+  }
+
+  const statusMap: Record<string, string> = {
+    'שולם': 'paid',
+    'ממתין': 'pending',
+    'שולם חלקית': 'partial',
+    'paid': 'paid',
+    'pending': 'pending',
+    'partial': 'partial',
+  }
+
+  const parseBoolean = (value: any): boolean => {
+    if (value === true || value === 'true' || value === 'כן' || value === 'yes') return true
+    return false
+  }
+
+  const translateValue = (value: any, map: Record<string, string>, defaultValue: string): string => {
+    if (!value) return defaultValue
+    const strValue = String(value).trim()
+    return map[strValue] || defaultValue
+  }
+
   const handleImport = async (data: Record<string, any>[]) => {
     if (!companyId) return
 
     const expenseRecords = data.map(row => {
       const amountBeforeVat = parseFloat(row.amount_before_vat) || 0
-      const vatExempt = row.vat_exempt === 'true' || row.vat_exempt === true
-      const docType = row.document_type || 'tax_invoice'
+      const vatExempt = parseBoolean(row.vat_exempt)
+      const docType = translateValue(row.document_type, documentTypeMap, 'tax_invoice')
+      const paymentStatus = translateValue(row.payment_status, statusMap, 'pending')
       const hasVat = !vatExempt && isVatDeductibleDocument(docType)
       const vatAmount = hasVat ? Math.round(amountBeforeVat * VAT_RATE * 100) / 100 : 0
       const amount = Math.round((amountBeforeVat + vatAmount) * 100) / 100
@@ -248,7 +281,7 @@ export default function ExpensesPage() {
         date: row.date || new Date().toISOString().split('T')[0],
         description: row.description || null,
         invoice_number: row.invoice_number || null,
-        payment_status: row.payment_status || 'pending',
+        payment_status: paymentStatus,
       }
     })
 
@@ -743,7 +776,7 @@ export default function ExpensesPage() {
             { key: 'document_type', label: 'סוג מסמך', required: false },
             { key: 'description', label: 'תיאור', required: false },
             { key: 'invoice_number', label: 'מספר מסמך', required: false },
-            { key: 'vat_exempt', label: 'פטור ממע״מ (true/false)', required: false },
+            { key: 'vat_exempt', label: 'פטור ממע״מ', required: false },
             { key: 'payment_status', label: 'סטטוס', required: false },
           ]}
           onImport={handleImport}
