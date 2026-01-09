@@ -1,6 +1,6 @@
-# כספית - מערכת ניהול פיננסי חכם
+# כספית - מערכת ניהול פיננסי חכם 💰
 
-מערכת מקיפה לניהול פיננסי לעסקים, כולל מעקב הכנסות והוצאות, תקציבים, דוחות ותובנות חכמות.
+מערכת מקיפה לניהול פיננסי לעסקים ישראליים, כולל מעקב הכנסות והוצאות, תקציבים, דוחות מע"מ ותובנות חכמות.
 
 ## ✨ תכונות עיקריות
 
@@ -8,11 +8,61 @@
 - 💰 **ניהול הכנסות והוצאות** - הוספה ידנית או ייבוא מאקסל
 - 🏦 **תנועות בנק** - ייבוא ומעקב תנועות בנק
 - 📈 **תקציב חכם** - הצעת תקציב אוטומטית ומעקב חריגות
-- 📑 **דוחות מפורטים** - דוחות חודשיים, לפי קטגוריה ומגמות
+- 📑 **דוח מע"מ** - חישוב אוטומטי של מע"מ (18%) לדיווח
 - 🏷️ **קטגוריות מותאמות** - הגדרה עצמית של קטגוריות
 - 👥 **ספקים ולקוחות** - ניהול אנשי קשר עסקיים
 - 🔔 **התראות חכמות** - התראות על חריגות, תשלומים ועוד
 - 🌐 **תמיכה מלאה בעברית** - ממשק RTL מלא
+
+---
+
+## 🔢 מע"מ
+
+המערכת מוגדרת לחישוב מע"מ בשיעור **18%** בהתאם לחוק בישראל.
+המע"מ מחושב אוטומטית בעת הזנת הכנסות והוצאות.
+
+---
+
+## 📤 ייבוא מאקסל
+
+המערכת תומכת בייבוא נתונים מקבצי Excel ו-CSV:
+
+### תבניות להורדה:
+- **הכנסות** - `public/templates/income-template.xlsx`
+- **הוצאות** - `public/templates/expenses-template.xlsx`
+- **תנועות בנק** - `public/templates/bank-template.xlsx`
+
+### עמודות נדרשות:
+
+**הכנסות:**
+| עמודה | חובה | תיאור |
+|-------|------|-------|
+| תאריך | כן | YYYY-MM-DD |
+| סכום | כן | סכום לפני מע"מ |
+| תיאור | לא | תיאור ההכנסה |
+| מספר חשבונית | לא | מספר המסמך |
+| פטור ממע"מ | לא | true/false |
+| סטטוס | לא | paid/pending |
+
+**הוצאות:**
+| עמודה | חובה | תיאור |
+|-------|------|-------|
+| תאריך | כן | YYYY-MM-DD |
+| סכום | כן | סכום לפני מע"מ |
+| תיאור | לא | תיאור ההוצאה |
+| מספר חשבונית | לא | מספר המסמך |
+| פטור ממע"מ | לא | true/false |
+| סטטוס | לא | paid/pending |
+
+**תנועות בנק:**
+| עמודה | חובה | תיאור |
+|-------|------|-------|
+| תאריך | כן | YYYY-MM-DD |
+| סכום | כן | סכום (חיובי/שלילי) |
+| תיאור | לא | תיאור התנועה |
+| יתרה | לא | יתרה לאחר התנועה |
+| שם הבנק | לא | שם הבנק |
+| מספר חשבון | לא | מספר חשבון |
 
 ---
 
@@ -24,84 +74,54 @@
 2. לחץ על **New Project**
 3. בחר שם לפרויקט (למשל: kaspit)
 4. בחר סיסמה לבסיס הנתונים (שמור אותה!)
-5. בחר אזור (מומלץ: Frankfurt או קרוב אליך)
+5. בחר אזור (מומלץ: Frankfurt)
 6. לחץ **Create new project**
 
 ### שלב 2: יצירת הטבלאות
 
-1. בתוך הפרויקט, לחץ על **SQL Editor** בתפריט השמאלי
+1. בתוך הפרויקט, לחץ על **SQL Editor**
 2. לחץ על **New query**
 3. העתק את כל התוכן מהקובץ `supabase-schema.sql`
 4. לחץ **Run** להרצת הקוד
-5. המתן עד שתראה הודעת הצלחה
 
 ### שלב 3: קבלת מפתחות
 
-1. לחץ על **Settings** (גלגל שיניים) בתפריט
-2. לחץ על **API**
-3. העתק את:
-   - **Project URL** (זה ה-NEXT_PUBLIC_SUPABASE_URL)
-   - **anon public key** (זה ה-NEXT_PUBLIC_SUPABASE_ANON_KEY)
+1. לחץ על **Settings** → **API**
+2. העתק את:
+   - **Project URL**
+   - **anon public key**
 
-### שלב 4: הגדרת Authentication
+### שלב 4: הגדרת משתני סביבה
 
-1. לחץ על **Authentication** בתפריט
-2. לחץ על **Providers**
-3. ודא ש-**Email** מופעל
-4. (אופציונלי) הפעל אימות נוסף כמו Google
-
----
-
-## 📤 העלאה ל-GitHub
-
-### אפשרות א: דרך GitHub Desktop (מומלץ למתחילים)
-
-1. הורד והתקן [GitHub Desktop](https://desktop.github.com/)
-2. היכנס עם חשבון GitHub שלך
-3. לחץ **File** → **Add Local Repository**
-4. בחר את תיקיית הפרויקט
-5. לחץ **Create Repository**
-6. לחץ **Publish Repository**
-7. בחר שם ולחץ **Publish**
-
-### אפשרות ב: דרך שורת הפקודה
+צור קובץ `.env.local` והעתק את התוכן מ-`.env.example`:
 
 ```bash
-cd kaspit
-git init
-git add .
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/kaspit.git
-git push -u origin main
+cp .env.example .env.local
 ```
+
+ערוך את הקובץ עם הערכים שקיבלת מ-Supabase.
+
+### שלב 5: התקנה והרצה
+
+```bash
+npm install
+npm run dev
+```
+
+פתח http://localhost:3000
 
 ---
 
 ## 🌐 פריסה ב-Vercel
 
-### שלב 1: חיבור ל-Vercel
-
-1. היכנס ל-[Vercel](https://vercel.com)
-2. לחץ **Add New** → **Project**
-3. חבר את חשבון GitHub שלך
+1. העלה את הקוד ל-GitHub
+2. היכנס ל-[Vercel](https://vercel.com)
+3. לחץ **Add New** → **Project**
 4. בחר את הריפו של kaspit
-5. לחץ **Import**
-
-### שלב 2: הגדרת משתני סביבה
-
-בדף ההגדרות לפני Deploy, הוסף:
-
-| Name | Value |
-|------|-------|
-| `NEXT_PUBLIC_SUPABASE_URL` | ה-URL מ-Supabase |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ה-anon key מ-Supabase |
-
-### שלב 3: פריסה
-
-1. לחץ **Deploy**
-2. המתן לסיום הבנייה (2-3 דקות)
-3. קבל את הלינק לאפליקציה! 🎉
+5. הוסף משתני סביבה:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+6. לחץ **Deploy**
 
 ---
 
@@ -117,44 +137,36 @@ kaspit/
 │   │   ├── bank/           # תנועות בנק
 │   │   ├── budget/         # תקציב
 │   │   ├── reports/        # דוחות
+│   │   ├── vat-report/     # דוח מע"מ
 │   │   ├── categories/     # קטגוריות
 │   │   ├── contacts/       # ספקים ולקוחות
 │   │   └── settings/       # הגדרות
-│   ├── login/              # דף התחברות
-│   └── layout.tsx          # Layout ראשי
+│   └── login/              # דף התחברות
 ├── components/             # קומפוננטות
-├── lib/                    # פונקציות עזר
+│   ├── dashboard/          # קומפוננטות דשבורד
+│   ├── forms/              # טפסים
+│   ├── import/             # ייבוא אקסל
+│   ├── layout/             # פריסה
+│   └── ui/                 # רכיבי UI בסיסיים
 ├── hooks/                  # React hooks
+├── lib/                    # פונקציות עזר
 ├── types/                  # TypeScript types
-└── public/                 # קבצים סטטיים
+├── templates/              # תבניות ייבוא
+└── public/templates/       # תבניות להורדה
 ```
 
 ---
 
-## 🔧 פיתוח מקומי
+## 🔧 טכנולוגיות
 
-```bash
-# התקנת תלויות
-npm install
-
-# יצירת קובץ סביבה
-cp .env.example .env.local
-# ערוך את .env.local עם המפתחות שלך
-
-# הרצה בפיתוח
-npm run dev
-```
-
-פתח http://localhost:3000
-
----
-
-## 📞 תמיכה
-
-אם יש בעיות:
-1. בדוק את ה-Console בדפדפן (F12)
-2. בדוק את Vercel Logs
-3. ודא שמשתני הסביבה הוגדרו נכון
+- **Framework:** Next.js 14 (App Router)
+- **Database:** Supabase (PostgreSQL)
+- **Auth:** Supabase Auth
+- **Styling:** Tailwind CSS
+- **Charts:** Recharts
+- **Excel:** ExcelJS
+- **Icons:** Lucide React
+- **Language:** TypeScript
 
 ---
 
