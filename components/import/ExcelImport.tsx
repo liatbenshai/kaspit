@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card'
 import { Alert } from '@/components/ui/Alert'
 import { Select } from '@/components/ui/Select'
 import { Upload, FileSpreadsheet, X, Check, Download } from 'lucide-react'
-import ExcelJS from 'exceljs'
+import * as XLSX from 'xlsx'
 
 interface ExcelImportProps {
   type: 'income' | 'expense' | 'bank'
@@ -24,11 +24,11 @@ const templateUrls = {
 const templateInfo = {
   income: {
     title: 'תבנית הכנסות',
-    columns: ['תאריך', 'סכום (לפני מע״מ)', 'תיאור', 'מספר חשבונית', 'פטור ממע״מ (true/false)', 'סטטוס (paid/pending)'],
+    columns: ['תאריך', 'סכום (לפני מע״מ)', 'תיאור', 'מספר מסמך', 'סוג מסמך', 'פטור ממע״מ', 'סטטוס'],
   },
   expense: {
     title: 'תבנית הוצאות',
-    columns: ['תאריך', 'סכום (לפני מע״מ)', 'תיאור', 'מספר חשבונית', 'פטור ממע״מ (true/false)', 'סטטוס (paid/pending)'],
+    columns: ['תאריך', 'סכום (לפני מע״מ)', 'תיאור', 'מספר מסמך', 'סוג מסמך', 'פטור ממע״מ', 'סטטוס'],
   },
   bank: {
     title: 'תבנית תנועות בנק',
@@ -42,6 +42,7 @@ export function ExcelImport({ type, requiredFields, onImport, onClose }: ExcelIm
   const [mapping, setMapping] = useState<Record<string, string>>({})
   const [previewData, setPreviewData] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [parsing, setParsing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [step, setStep] = useState<'upload' | 'mapping' | 'preview'>('upload')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -57,11 +58,13 @@ export function ExcelImport({ type, requiredFields, onImport, onClose }: ExcelIm
 
     setFile(selectedFile)
     setError(null)
+    setParsing(true)
 
     try {
       const data = await readExcelFile(selectedFile)
       if (data.length === 0) {
         setError('הקובץ ריק')
+        setParsing(false)
         return
       }
 
@@ -74,7 +77,9 @@ export function ExcelImport({ type, requiredFields, onImport, onClose }: ExcelIm
       requiredFields.forEach((field) => {
         const match = fileHeaders.find(
           (h) => h.toLowerCase() === field.label.toLowerCase() ||
-                 h.toLowerCase() === field.key.toLowerCase()
+                 h.toLowerCase() === field.key.toLowerCase() ||
+                 h.includes(field.label) ||
+                 field.label.includes(h)
         )
         if (match) {
           autoMapping[field.key] = match
@@ -84,66 +89,54 @@ export function ExcelImport({ type, requiredFields, onImport, onClose }: ExcelIm
       setStep('mapping')
     } catch (err) {
       setError('שגיאה בקריאת הקובץ')
+    } finally {
+      setParsing(false)
     }
   }
 
   const readExcelFile = async (file: File): Promise<any[]> => {
     const arrayBuffer = await file.arrayBuffer()
-    const workbook = new ExcelJS.Workbook()
     
-    if (file.name.endsWith('.csv')) {
-      // Handle CSV files
-      const text = new TextDecoder().decode(arrayBuffer)
-      const lines = text.split('\n').filter(line => line.trim())
-      if (lines.length === 0) return []
-      
-      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
-      return lines.slice(1).map(line => {
-        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''))
-        const row: Record<string, any> = {}
-        headers.forEach((header, i) => {
-          row[header] = values[i] || ''
-        })
-        return row
-      })
-    }
-    
-    // Handle Excel files
-    await workbook.xlsx.load(arrayBuffer)
-    const worksheet = workbook.worksheets[0]
-    
-    if (!worksheet || worksheet.rowCount === 0) return []
-    
-    const headers: string[] = []
-    const headerRow = worksheet.getRow(1)
-    headerRow.eachCell((cell, colNumber) => {
-      headers[colNumber - 1] = String(cell.value || `Column${colNumber}`)
+    // xlsx (SheetJS) is much faster than ExcelJS
+    const workbook = XLSX.read(arrayBuffer, { 
+      type: 'array',
+      cellDates: true,
+      dateNF: 'yyyy-mm-dd'
     })
     
-    const data: any[] = []
-    worksheet.eachRow((row, rowNumber) => {
-      if (rowNumber === 1) return // Skip header row
-      
-      const rowData: Record<string, any> = {}
-      row.eachCell((cell, colNumber) => {
-        const header = headers[colNumber - 1]
-        if (header) {
-          // Handle date values
-          if (cell.value instanceof Date) {
-            rowData[header] = cell.value.toISOString().split('T')[0]
+    const firstSheetName = workbook.SheetNames[0]
+    const worksheet = workbook.Sheets[firstSheetName]
+    
+    // Convert to JSON with header row
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+      raw: false,
+      dateNF: 'yyyy-mm-dd',
+      defval: ''
+    })
+    
+    // Format dates properly
+    return jsonData.map((row: any) => {
+      const formattedRow: Record<string, any> = {}
+      for (const [key, value] of Object.entries(row)) {
+        if (value instanceof Date) {
+          formattedRow[key] = value.toISOString().split('T')[0]
+        } else if (typeof value === 'string' && value.match(/^\d{1,2}\/\d{1,2}\/\d{2,4}$/)) {
+          // Handle DD/MM/YYYY format
+          const parts = value.split('/')
+          if (parts.length === 3) {
+            const day = parts[0].padStart(2, '0')
+            const month = parts[1].padStart(2, '0')
+            const year = parts[2].length === 2 ? '20' + parts[2] : parts[2]
+            formattedRow[key] = `${year}-${month}-${day}`
           } else {
-            rowData[header] = cell.value
+            formattedRow[key] = value
           }
+        } else {
+          formattedRow[key] = value
         }
-      })
-      
-      // Only add rows that have at least one value
-      if (Object.keys(rowData).length > 0) {
-        data.push(rowData)
       }
+      return formattedRow
     })
-    
-    return data
   }
 
   const handleMappingChange = (fieldKey: string, excelHeader: string) => {
@@ -245,9 +238,18 @@ export function ExcelImport({ type, requiredFields, onImport, onClose }: ExcelIm
             onClick={() => fileInputRef.current?.click()}
             className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-primary-500 transition-colors"
           >
-            <FileSpreadsheet className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-            <p className="text-gray-600 mb-2">גרור קובץ לכאן או לחץ לבחירה</p>
-            <p className="text-sm text-gray-400">Excel (.xlsx, .xls) או CSV</p>
+            {parsing ? (
+              <div className="space-y-2">
+                <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-gray-600">קורא קובץ...</p>
+              </div>
+            ) : (
+              <>
+                <FileSpreadsheet className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+                <p className="text-gray-600 mb-2">גרור קובץ לכאן או לחץ לבחירה</p>
+                <p className="text-sm text-gray-400">Excel (.xlsx, .xls) או CSV</p>
+              </>
+            )}
             <input
               ref={fileInputRef}
               type="file"
@@ -264,7 +266,7 @@ export function ExcelImport({ type, requiredFields, onImport, onClose }: ExcelIm
               <li>השורה הראשונה צריכה להכיל כותרות עמודות</li>
               <li>תאריכים בפורמט: YYYY-MM-DD או DD/MM/YYYY</li>
               <li>סכומים כמספרים בלבד (ללא ₪)</li>
-              <li>סטטוס: paid (שולם) / pending (ממתין)</li>
+              <li>סטטוס: שולם / ממתין</li>
             </ul>
           </div>
         </div>
