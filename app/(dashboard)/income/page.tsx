@@ -320,6 +320,17 @@ export default function IncomePage() {
   const handleImport = async (data: Record<string, any>[]) => {
     if (!companyId) return
 
+    // מציאת קטגוריה לפי שם
+    const findCategoryId = (categoryName: string | undefined): string | null => {
+      if (!categoryName) return null
+      const cat = categories.find(c => 
+        c.name === categoryName || 
+        c.name.includes(categoryName) || 
+        categoryName.includes(c.name)
+      )
+      return cat?.id || null
+    }
+
     const incomeRecords = data.map(row => {
       const amountBeforeVat = parseFloat(row.amount_before_vat) || 0
       const vatExempt = parseBoolean(row.vat_exempt)
@@ -328,9 +339,11 @@ export default function IncomePage() {
       const hasVat = !vatExempt && isVatDocument(docType)
       const vatAmount = hasVat ? Math.round(amountBeforeVat * VAT_RATE * 100) / 100 : 0
       const amount = Math.round((amountBeforeVat + vatAmount) * 100) / 100
+      const categoryId = findCategoryId(row.category_name)
 
       return {
         company_id: companyId,
+        category_id: categoryId,
         amount: amount,
         amount_before_vat: amountBeforeVat,
         vat_amount: vatAmount,
@@ -885,6 +898,7 @@ export default function IncomePage() {
           requiredFields={[
             { key: 'amount_before_vat', label: 'סכום (לפני מע״מ)', required: true },
             { key: 'date', label: 'תאריך', required: true },
+            { key: 'category_name', label: 'קטגוריה', required: false },
             { key: 'document_type', label: 'סוג מסמך', required: false },
             { key: 'description', label: 'תיאור', required: false },
             { key: 'invoice_number', label: 'מספר מסמך', required: false },
