@@ -11,7 +11,8 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { ExcelImport } from '@/components/import/ExcelImport'
 import { supabase } from '@/lib/supabase'
 import { formatCurrency, formatDateShort, cn } from '@/lib/utils'
-import { Upload, Search, ArrowUpCircle, ArrowDownCircle, Link2 } from 'lucide-react'
+import { Upload, Search, ArrowUpCircle, ArrowDownCircle, Link2, Calendar } from 'lucide-react'
+import { Select } from '@/components/ui/Select'
 import type { BankTransaction } from '@/types'
 
 export default function BankPage() {
@@ -20,6 +21,7 @@ export default function BankPage() {
   const [showImportModal, setShowImportModal] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [companyId, setCompanyId] = useState<string | null>(null)
+  const [selectedMonth, setSelectedMonth] = useState<string>('')
 
   useEffect(() => {
     loadData()
@@ -82,9 +84,11 @@ export default function BankPage() {
     loadData()
   }
 
-  const filteredTransactions = transactions.filter(item =>
-    !searchTerm || item.description?.includes(searchTerm)
-  )
+  const filteredTransactions = transactions.filter(item => {
+    const matchesSearch = !searchTerm || item.description?.includes(searchTerm)
+    const matchesMonth = !selectedMonth || item.date.startsWith(selectedMonth)
+    return matchesSearch && matchesMonth
+  })
 
   const totalIncome = filteredTransactions
     .filter(t => t.amount > 0)
@@ -154,16 +158,53 @@ export default function BankPage() {
         </Card>
       </div>
 
-      {/* Search */}
+      {/* Search & Filter */}
       <Card padding="md">
-        <div className="relative max-w-md">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input
-            placeholder="חיפוש לפי תיאור..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pr-10"
-          />
+        <div className="flex flex-wrap gap-4 items-center">
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              placeholder="חיפוש לפי תיאור..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pr-10"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-gray-400" />
+            <Select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              options={[
+                { value: '', label: 'כל החודשים' },
+                { value: '2025-01', label: 'ינואר 2025' },
+                { value: '2025-02', label: 'פברואר 2025' },
+                { value: '2025-03', label: 'מרץ 2025' },
+                { value: '2025-04', label: 'אפריל 2025' },
+                { value: '2025-05', label: 'מאי 2025' },
+                { value: '2025-06', label: 'יוני 2025' },
+                { value: '2025-07', label: 'יולי 2025' },
+                { value: '2025-08', label: 'אוגוסט 2025' },
+                { value: '2025-09', label: 'ספטמבר 2025' },
+                { value: '2025-10', label: 'אוקטובר 2025' },
+                { value: '2025-11', label: 'נובמבר 2025' },
+                { value: '2025-12', label: 'דצמבר 2025' },
+                { value: '2024-01', label: 'ינואר 2024' },
+                { value: '2024-02', label: 'פברואר 2024' },
+                { value: '2024-03', label: 'מרץ 2024' },
+                { value: '2024-04', label: 'אפריל 2024' },
+                { value: '2024-05', label: 'מאי 2024' },
+                { value: '2024-06', label: 'יוני 2024' },
+                { value: '2024-07', label: 'יולי 2024' },
+                { value: '2024-08', label: 'אוגוסט 2024' },
+                { value: '2024-09', label: 'ספטמבר 2024' },
+                { value: '2024-10', label: 'אוקטובר 2024' },
+                { value: '2024-11', label: 'נובמבר 2024' },
+                { value: '2024-12', label: 'דצמבר 2024' },
+              ]}
+              className="w-40"
+            />
+          </div>
         </div>
       </Card>
 
