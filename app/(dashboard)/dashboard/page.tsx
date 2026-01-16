@@ -28,9 +28,11 @@ export default function DashboardPage() {
   const [stats, setStats] = useState({
     totalIncome: 0,
     totalExpenses: 0,
-    balance: 0,
+    bankBalance: null as number | null,
     prevIncome: 0,
     prevExpenses: 0,
+    matchedTransactions: 0,
+    unmatchedTransactions: 0,
   })
   const [chartData, setChartData] = useState<any[]>([])
   const [budgetStatus, setBudgetStatus] = useState<BudgetStatus[]>([])
@@ -150,18 +152,33 @@ export default function DashboardPage() {
         .order('date', { ascending: false })
         .limit(1)
 
+      // ספירת תנועות מותאמות ולא מותאמות
+      const { data: matchedData, count: matchedCount } = await supabase
+        .from('bank_transactions')
+        .select('id', { count: 'exact' })
+        .eq('company_id', companyId)
+        .not('matched_id', 'is', null)
+
+      const { data: unmatchedData, count: unmatchedCount } = await supabase
+        .from('bank_transactions')
+        .select('id', { count: 'exact' })
+        .eq('company_id', companyId)
+        .is('matched_id', null)
+
       const totalIncome = periodIncome?.reduce((sum, i) => sum + Number(i.amount), 0) || 0
       const totalExpenses = periodExpenses?.reduce((sum, e) => sum + Number(e.amount), 0) || 0
       const prevIncomeTotal = prevIncome?.reduce((sum, i) => sum + Number(i.amount), 0) || 0
       const prevExpensesTotal = prevExpenses?.reduce((sum, e) => sum + Number(e.amount), 0) || 0
-      const balance = bankData?.[0]?.balance || totalIncome - totalExpenses
+      const bankBalance = bankData?.[0]?.balance ?? null
 
       setStats({
         totalIncome,
         totalExpenses,
-        balance,
+        bankBalance,
         prevIncome: prevIncomeTotal,
         prevExpenses: prevExpensesTotal,
+        matchedTransactions: matchedCount || 0,
+        unmatchedTransactions: unmatchedCount || 0,
       })
 
       // פירוט לפי קטגוריה
@@ -368,9 +385,18 @@ export default function DashboardPage() {
       <StatsCards
         totalIncome={stats.totalIncome}
         totalExpenses={stats.totalExpenses}
-        balance={stats.balance}
+        bankBalance={stats.bankBalance}
         prevIncome={stats.prevIncome}
         prevExpenses={stats.prevExpenses}
+        periodLabel={
+          viewMode === 'month' 
+            ? `ב${hebrewMonths[selectedMonth - 1]}` 
+            : viewMode === 'year' 
+            ? `ב-${selectedYear}` 
+            : ''
+        }
+        matchedTransactions={stats.matchedTransactions}
+        unmatchedTransactions={stats.unmatchedTransactions}
       />
 
       {/* Charts Row */}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -11,7 +12,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { ExcelImport } from '@/components/import/ExcelImport'
 import { supabase } from '@/lib/supabase'
 import { formatCurrency, formatDateShort, cn } from '@/lib/utils'
-import { Upload, Search, ArrowUpCircle, ArrowDownCircle, Link2, Calendar } from 'lucide-react'
+import { Upload, Search, ArrowUpCircle, ArrowDownCircle, Link2, Calendar, ArrowLeftRight } from 'lucide-react'
 import { Select } from '@/components/ui/Select'
 import type { BankTransaction } from '@/types'
 
@@ -218,12 +219,13 @@ export default function BankPage() {
               <TableHead>סכום</TableHead>
               <TableHead>יתרה</TableHead>
               <TableHead>התאמה</TableHead>
+              <TableHead>פעולות</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredTransactions.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
                   <div className="space-y-2">
                     <p>אין תנועות בנק להצגה</p>
                     <p className="text-sm">ייבא תנועות מקובץ Excel של הבנק</p>
@@ -260,6 +262,16 @@ export default function BankPage() {
                       </Badge>
                     ) : (
                       <Badge variant="default">לא מותאם</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {!item.matched_type && (
+                      <Link href="/reconciliation">
+                        <Button size="sm" variant="outline">
+                          <ArrowLeftRight className="w-3 h-3" />
+                          התאם
+                        </Button>
+                      </Link>
                     )}
                   </TableCell>
                 </TableRow>
