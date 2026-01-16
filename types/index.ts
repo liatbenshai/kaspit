@@ -91,6 +91,9 @@ export type ExpenseDocumentType =
 // סטטוס מסמך
 export type DocumentStatus = 'open' | 'closed' | 'cancelled'
 
+// אמצעי תשלום
+export type PaymentMethod = 'bank_transfer' | 'standing_order' | 'credit_card' | 'cash' | 'check'
+
 // הכנסה
 export interface Income {
   id: string
@@ -129,6 +132,7 @@ export interface Expense {
   vat_exempt: boolean
   vat_deductible: boolean
   document_type: ExpenseDocumentType
+  payment_method: PaymentMethod | null
   date: string
   description: string | null
   invoice_number: string | null

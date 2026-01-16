@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
+import { Alert } from '@/components/ui/Alert'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table'
 import { ExcelImport } from '@/components/import/ExcelImport'
 import { supabase } from '@/lib/supabase'
@@ -34,6 +35,18 @@ const isVatDeductibleDocument = (type: string) => {
   return ['tax_invoice', 'tax_invoice_receipt', 'credit_note'].includes(type)
 }
 
+// סוגי אמצעי תשלום
+type PaymentMethod = 'bank_transfer' | 'standing_order' | 'credit_card' | 'cash' | 'check' | ''
+
+const paymentMethods = [
+  { value: '', label: 'בחר אמצעי תשלום' },
+  { value: 'bank_transfer', label: 'העברה בנקאית' },
+  { value: 'standing_order', label: 'הוראת קבע' },
+  { value: 'credit_card', label: 'כרטיס אשראי' },
+  { value: 'cash', label: 'מזומן' },
+  { value: 'check', label: 'צ׳ק' },
+]
+
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -46,6 +59,7 @@ export default function ExpensesPage() {
   const [filterStatus, setFilterStatus] = useState('')
   const [filterDocType, setFilterDocType] = useState('')
   const [companyId, setCompanyId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     category_id: '',
@@ -56,6 +70,7 @@ export default function ExpensesPage() {
     vat_exempt: false,
     vat_deductible: true,
     document_type: 'tax_invoice' as ExpenseDocumentType,
+    payment_method: '' as PaymentMethod,
     date: new Date().toISOString().split('T')[0],
     description: '',
     invoice_number: '',
@@ -153,7 +168,13 @@ export default function ExpensesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!companyId) return
+    if (!companyId) {
+      setError('שגיאה: לא נמצא מזהה חברה. נסי להתנתק ולהתחבר מחדש.')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
 
     try {
       // קביעה אוטומטית של מע"מ לקיזוז לפי סוג מסמך
@@ -169,6 +190,7 @@ export default function ExpensesPage() {
         vat_exempt: formData.vat_exempt,
         vat_deductible: canDeductVat && formData.vat_deductible,
         document_type: formData.document_type,
+        payment_method: formData.payment_method,
         date: formData.date,
         description: formData.description || null,
         invoice_number: formData.invoice_number || null,
@@ -179,21 +201,33 @@ export default function ExpensesPage() {
         recurring_day: formData.recurring_day ? parseInt(formData.recurring_day) : null,
       }
 
+      let error
       if (editingExpense) {
-        await supabase
+        const result = await supabase
           .from('expenses')
           .update(expenseData)
           .eq('id', editingExpense.id)
+        error = result.error
       } else {
-        await supabase.from('expenses').insert(expenseData)
+        const result = await supabase.from('expenses').insert(expenseData)
+        error = result.error
+      }
+
+      if (error) {
+        console.error('Supabase error:', error)
+        setError(`שגיאה בשמירה: ${error.message}`)
+        return
       }
 
       setShowAddModal(false)
       setEditingExpense(null)
       resetForm()
       loadData()
-    } catch (error) {
-      console.error('Error saving expense:', error)
+    } catch (err: any) {
+      console.error('Error saving expense:', err)
+      setError(`שגיאה בשמירה: ${err.message || 'שגיאה לא ידועה'}`)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -208,6 +242,7 @@ export default function ExpensesPage() {
       vat_exempt: item.vat_exempt || false,
       vat_deductible: item.vat_deductible !== false,
       document_type: item.document_type || 'tax_invoice',
+      payment_method: (item as any).payment_method || '',
       date: item.date,
       description: item.description || '',
       invoice_number: item.invoice_number || '',
@@ -313,6 +348,7 @@ export default function ExpensesPage() {
       vat_exempt: false,
       vat_deductible: true,
       document_type: 'tax_invoice',
+      payment_method: '',
       date: new Date().toISOString().split('T')[0],
       description: '',
       invoice_number: '',
@@ -323,6 +359,7 @@ export default function ExpensesPage() {
       recurring_day: '',
     })
     setInputMode('before_vat')
+    setError(null)
   }
 
   const filteredExpenses = expenses.filter(item => {
@@ -543,6 +580,13 @@ export default function ExpensesPage() {
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Error Alert */}
+          {error && (
+            <Alert variant="danger" onClose={() => setError(null)}>
+              {error}
+            </Alert>
+          )}
+
           {/* Document Type */}
           <Select
             label="סוג מסמך"
@@ -723,15 +767,22 @@ export default function ExpensesPage() {
               value={formData.payment_status}
               onChange={(e) => setFormData({ ...formData, payment_status: e.target.value as any })}
             />
-            {formData.payment_status === 'paid' && (
-              <Input
-                label="תאריך תשלום"
-                type="date"
-                value={formData.paid_date}
-                onChange={(e) => setFormData({ ...formData, paid_date: e.target.value })}
-              />
-            )}
+            <Select
+              label="אמצעי תשלום"
+              options={paymentMethods}
+              value={formData.payment_method}
+              onChange={(e) => setFormData({ ...formData, payment_method: e.target.value as PaymentMethod })}
+            />
           </div>
+
+          {formData.payment_status === 'paid' && (
+            <Input
+              label="תאריך תשלום"
+              type="date"
+              value={formData.paid_date}
+              onChange={(e) => setFormData({ ...formData, paid_date: e.target.value })}
+            />
+          )}
 
           <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
             <label className="flex items-center gap-2 cursor-pointer">
