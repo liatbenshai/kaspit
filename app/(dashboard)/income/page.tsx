@@ -18,6 +18,18 @@ import type { Income, Category, Customer, IncomeDocumentType, DocumentStatus } f
 
 const VAT_RATE = 0.18
 
+// סוגי אמצעי תשלום
+type PaymentMethod = 'bank_transfer' | 'credit_card' | 'cash' | 'check' | 'bit' | ''
+
+const paymentMethods = [
+  { value: '', label: 'בחר אמצעי תשלום' },
+  { value: 'bank_transfer', label: 'העברה בנקאית' },
+  { value: 'credit_card', label: 'כרטיס אשראי' },
+  { value: 'cash', label: 'מזומן' },
+  { value: 'check', label: 'צ׳ק' },
+  { value: 'bit', label: 'ביט / פייבוקס' },
+]
+
 // סוגי מסמכים להכנסות
 const incomeDocumentTypes = [
   { value: 'invoice', label: 'חשבונית עסקה' },
@@ -87,6 +99,7 @@ export default function IncomePage() {
     invoice_number: '',
     payment_status: 'pending' as 'pending' | 'partial' | 'paid',
     payment_date: '',
+    payment_method: '' as PaymentMethod,
   })
 
   const [inputMode, setInputMode] = useState<'before_vat' | 'total'>('before_vat')
@@ -202,6 +215,7 @@ export default function IncomePage() {
         invoice_number: formData.invoice_number || null,
         payment_status: formData.payment_status,
         payment_date: formData.payment_date || null,
+        payment_method: formData.payment_method || null,
       }
 
       if (editingIncome) {
@@ -273,6 +287,7 @@ export default function IncomePage() {
       invoice_number: item.invoice_number || '',
       payment_status: item.payment_status,
       payment_date: item.payment_date || '',
+      payment_method: (item as any).payment_method || '',
     })
     setShowAddModal(true)
   }
@@ -377,6 +392,7 @@ export default function IncomePage() {
       invoice_number: '',
       payment_status: 'pending',
       payment_date: '',
+      payment_method: '',
     })
     setInputMode('before_vat')
   }
@@ -798,15 +814,22 @@ export default function IncomePage() {
               value={formData.payment_status}
               onChange={(e) => setFormData({ ...formData, payment_status: e.target.value as any })}
             />
-            {formData.payment_status === 'paid' && (
-              <Input
-                label="תאריך תשלום"
-                type="date"
-                value={formData.payment_date}
-                onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
-              />
-            )}
+            <Select
+              label="אמצעי תשלום"
+              options={paymentMethods}
+              value={formData.payment_method}
+              onChange={(e) => setFormData({ ...formData, payment_method: e.target.value as PaymentMethod })}
+            />
           </div>
+
+          {formData.payment_status === 'paid' && (
+            <Input
+              label="תאריך תשלום"
+              type="date"
+              value={formData.payment_date}
+              onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
+            />
+          )}
 
           <div className="flex gap-3 pt-4">
             <Button type="submit">

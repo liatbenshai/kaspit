@@ -92,7 +92,7 @@ export type ExpenseDocumentType =
 export type DocumentStatus = 'open' | 'closed' | 'cancelled'
 
 // אמצעי תשלום
-export type PaymentMethod = 'bank_transfer' | 'standing_order' | 'credit_card' | 'cash' | 'check'
+export type PaymentMethod = 'bank_transfer' | 'standing_order' | 'credit_card' | 'cash' | 'check' | 'bit'
 
 // הכנסה
 export interface Income {
@@ -107,6 +107,7 @@ export interface Income {
   document_type: IncomeDocumentType
   document_status: DocumentStatus
   linked_document_id: string | null
+  payment_method: PaymentMethod | null
   date: string
   description: string | null
   invoice_number: string | null

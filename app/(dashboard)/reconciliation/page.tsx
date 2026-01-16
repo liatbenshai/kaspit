@@ -121,6 +121,17 @@ export default function ReconciliationPage() {
     }
   }
 
+  // זיהוי תנועות מחברות אשראי
+  const isCreditCardCompany = (description: string): boolean => {
+    const creditCompanies = [
+      'ישראכרט', 'isracard', 'כאל', 'cal', 'מקס', 'max', 
+      'לאומי קארד', 'leumi card', 'אמריקן אקספרס', 'american express',
+      'דיינרס', 'diners', 'ויזה', 'visa', 'מסטרקארד', 'mastercard'
+    ]
+    const descLower = description.toLowerCase()
+    return creditCompanies.some(company => descLower.includes(company))
+  }
+
   // חישוב הצעות התאמה
   const calculateSuggestions = (
     transaction: BankTransaction,
@@ -131,10 +142,15 @@ export default function ReconciliationPage() {
     const isCredit = transaction.amount > 0 // זיכוי = הכנסה
     const absAmount = Math.abs(transaction.amount)
     const transactionDate = new Date(transaction.date)
+    const isCreditCardTrans = isCreditCardCompany(transaction.description || '')
 
     if (isCredit) {
       // חיפוש בהכנסות
       incomeList.forEach(income => {
+        // בונוס אם זו תנועת אשראי וההכנסה סומנה כאשראי
+        const paymentMethodBonus = 
+          isCreditCardTrans && (income as any).payment_method === 'credit_card' ? 15 : 0
+
         const score = calculateMatchScore(
           absAmount,
           income.amount,
@@ -142,27 +158,37 @@ export default function ReconciliationPage() {
           new Date(income.date),
           transaction.description || '',
           (income.customer as any)?.name || income.description || ''
-        )
+        ) + paymentMethodBonus
 
         if (score >= 40) {
+          const reasons = getMatchReasons(
+            absAmount,
+            income.amount,
+            transactionDate,
+            new Date(income.date),
+            transaction.description || '',
+            (income.customer as any)?.name || ''
+          )
+          
+          if (paymentMethodBonus > 0) {
+            reasons.push('אמצעי תשלום תואם (אשראי)')
+          }
+
           suggestions.push({
             type: 'income',
             item: income,
-            score,
-            reasons: getMatchReasons(
-              absAmount,
-              income.amount,
-              transactionDate,
-              new Date(income.date),
-              transaction.description || '',
-              (income.customer as any)?.name || ''
-            )
+            score: Math.min(score, 100),
+            reasons
           })
         }
       })
     } else {
       // חיפוש בהוצאות
       expenseList.forEach(expense => {
+        // בונוס אם אמצעי התשלום תואם
+        const paymentMethodBonus = 
+          isCreditCardTrans && (expense as any).payment_method === 'credit_card' ? 15 : 0
+
         const score = calculateMatchScore(
           absAmount,
           expense.amount,
@@ -170,21 +196,27 @@ export default function ReconciliationPage() {
           new Date(expense.date),
           transaction.description || '',
           (expense.supplier as any)?.name || expense.description || ''
-        )
+        ) + paymentMethodBonus
 
         if (score >= 40) {
+          const reasons = getMatchReasons(
+            absAmount,
+            expense.amount,
+            transactionDate,
+            new Date(expense.date),
+            transaction.description || '',
+            (expense.supplier as any)?.name || ''
+          )
+
+          if (paymentMethodBonus > 0) {
+            reasons.push('אמצעי תשלום תואם (אשראי)')
+          }
+
           suggestions.push({
             type: 'expense',
             item: expense,
-            score,
-            reasons: getMatchReasons(
-              absAmount,
-              expense.amount,
-              transactionDate,
-              new Date(expense.date),
-              transaction.description || '',
-              (expense.supplier as any)?.name || ''
-            )
+            score: Math.min(score, 100),
+            reasons
           })
         }
       })
