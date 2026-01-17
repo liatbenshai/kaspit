@@ -379,7 +379,7 @@ export default function IncomePage() {
       document_type: item.document_type || 'tax_invoice',
       linked_document_id: item.linked_document_id || '',
       date: item.date,
-      due_date: item.due_date || '',
+      due_date: (item as any).due_date || '',
       payment_terms: (item as any).payment_terms || '',
       description: item.description || '',
       invoice_number: item.invoice_number || '',
@@ -624,13 +624,13 @@ export default function IncomePage() {
   const totalPending = pendingPayments.reduce((sum, item) => sum + Number(item.amount), 0)
 
   // חישוב הכנסות באיחור
-  const overduePayments = income.filter(i => isOverdue(i.due_date, i.payment_status))
+  const overduePayments = income.filter(i => isOverdue((i as any).due_date, i.payment_status))
   const totalOverdue = overduePayments.reduce((sum, item) => sum + Number(item.amount), 0)
 
   // חישוב הכנסות עתידיות (עם תאריך לתשלום בעתיד)
   const futurePayments = income.filter(i => 
-    i.due_date && 
-    new Date(i.due_date) > new Date() && 
+    (i as any).due_date && 
+    new Date((i as any).due_date) > new Date() && 
     i.payment_status !== 'paid'
   )
   const totalFuture = futurePayments.reduce((sum, item) => sum + Number(item.amount), 0)
@@ -942,12 +942,12 @@ export default function IncomePage() {
                     {formatCurrency(item.amount)}
                   </TableCell>
                   <TableCell>
-                    {item.due_date ? (
-                      <div className={`flex items-center gap-1 ${isOverdue(item.due_date, item.payment_status) ? 'text-danger-600' : ''}`}>
-                        {isOverdue(item.due_date, item.payment_status) && (
+                    {(item as any).due_date ? (
+                      <div className={`flex items-center gap-1 ${isOverdue((item as any).due_date, item.payment_status) ? 'text-danger-600' : ''}`}>
+                        {isOverdue((item as any).due_date, item.payment_status) && (
                           <Clock className="w-4 h-4" />
                         )}
-                        <span className="text-sm">{formatDateShort(item.due_date)}</span>
+                        <span className="text-sm">{formatDateShort((item as any).due_date)}</span>
                       </div>
                     ) : (
                       <span className="text-gray-400 text-sm">-</span>
