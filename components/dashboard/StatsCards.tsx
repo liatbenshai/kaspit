@@ -2,7 +2,7 @@
 
 import { Card } from '@/components/ui/Card'
 import { formatCurrency, calculateChange } from '@/lib/utils'
-import { TrendingUp, TrendingDown, Wallet, ArrowUp, ArrowDown, Building2, CheckCircle, AlertCircle, Link2 } from 'lucide-react'
+import { TrendingUp, TrendingDown, Wallet, ArrowUp, ArrowDown, Building2, CheckCircle, AlertCircle, Link2, Clock, CalendarClock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface StatsCardsProps {
@@ -15,6 +15,11 @@ interface StatsCardsProps {
   // נתוני התאמה
   matchedTransactions?: number
   unmatchedTransactions?: number
+  // הכנסות עתידיות ובאיחור
+  futureIncome?: number
+  overdueIncome?: number
+  futureCount?: number
+  overdueCount?: number
 }
 
 export function StatsCards({
@@ -26,6 +31,10 @@ export function StatsCards({
   periodLabel = 'בתקופה',
   matchedTransactions = 0,
   unmatchedTransactions = 0,
+  futureIncome = 0,
+  overdueIncome = 0,
+  futureCount = 0,
+  overdueCount = 0,
 }: StatsCardsProps) {
   const incomeChange = calculateChange(totalIncome, prevIncome)
   const expensesChange = calculateChange(totalExpenses, prevExpenses)
@@ -191,6 +200,54 @@ export function StatsCards({
           </div>
         </Card>
       </div>
+
+      {/* שורה שלישית - הכנסות עתידיות ובאיחור */}
+      {(futureIncome > 0 || overdueIncome > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* הכנסות עתידיות */}
+          {futureIncome > 0 && (
+            <Card padding="md" className="bg-gradient-to-br from-primary-50 to-indigo-50 border-primary-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-primary-700 font-medium">הכנסות עתידיות</p>
+                  <p className="text-2xl font-bold text-primary-900 mt-1">
+                    {formatCurrency(futureIncome)}
+                  </p>
+                  <p className="text-xs text-primary-600 mt-2">
+                    {futureCount} חשבוניות ממתינות לתשלום
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl bg-primary-100">
+                  <CalendarClock className="w-6 h-6 text-primary-600" />
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* הכנסות באיחור */}
+          {overdueIncome > 0 && (
+            <Card padding="md" className="bg-gradient-to-br from-danger-50 to-red-50 border-danger-300">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-danger-700 font-medium flex items-center gap-1">
+                    <Clock className="w-4 h-4" />
+                    באיחור!
+                  </p>
+                  <p className="text-2xl font-bold text-danger-700 mt-1">
+                    {formatCurrency(overdueIncome)}
+                  </p>
+                  <a href="/income" className="text-xs text-danger-600 hover:underline mt-2 inline-block">
+                    {overdueCount} חשבוניות לטיפול →
+                  </a>
+                </div>
+                <div className="p-3 rounded-xl bg-danger-100">
+                  <AlertCircle className="w-6 h-6 text-danger-600" />
+                </div>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
     </div>
   )
 }

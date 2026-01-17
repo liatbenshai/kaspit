@@ -33,6 +33,10 @@ export default function DashboardPage() {
     prevExpenses: 0,
     matchedTransactions: 0,
     unmatchedTransactions: 0,
+    futureIncome: 0,
+    overdueIncome: 0,
+    futureCount: 0,
+    overdueCount: 0,
   })
   const [chartData, setChartData] = useState<any[]>([])
   const [budgetStatus, setBudgetStatus] = useState<BudgetStatus[]>([])
@@ -165,11 +169,30 @@ export default function DashboardPage() {
         .eq('company_id', companyId)
         .is('matched_id', null)
 
+      // הכנסות עתידיות - תאריך לתשלום בעתיד ולא שולם
+      const today = new Date().toISOString().split('T')[0]
+      const { data: futureIncomeData } = await supabase
+        .from('income')
+        .select('amount, due_date')
+        .eq('company_id', companyId)
+        .gt('due_date', today)
+        .neq('payment_status', 'paid')
+
+      // הכנסות באיחור - תאריך לתשלום עבר ולא שולם
+      const { data: overdueIncomeData } = await supabase
+        .from('income')
+        .select('amount, due_date')
+        .eq('company_id', companyId)
+        .lt('due_date', today)
+        .neq('payment_status', 'paid')
+
       const totalIncome = periodIncome?.reduce((sum, i) => sum + Number(i.amount), 0) || 0
       const totalExpenses = periodExpenses?.reduce((sum, e) => sum + Number(e.amount), 0) || 0
       const prevIncomeTotal = prevIncome?.reduce((sum, i) => sum + Number(i.amount), 0) || 0
       const prevExpensesTotal = prevExpenses?.reduce((sum, e) => sum + Number(e.amount), 0) || 0
       const bankBalance = bankData?.[0]?.balance ?? null
+      const futureIncome = futureIncomeData?.reduce((sum, i) => sum + Number(i.amount), 0) || 0
+      const overdueIncome = overdueIncomeData?.reduce((sum, i) => sum + Number(i.amount), 0) || 0
 
       setStats({
         totalIncome,
@@ -179,6 +202,10 @@ export default function DashboardPage() {
         prevExpenses: prevExpensesTotal,
         matchedTransactions: matchedCount || 0,
         unmatchedTransactions: unmatchedCount || 0,
+        futureIncome,
+        overdueIncome,
+        futureCount: futureIncomeData?.length || 0,
+        overdueCount: overdueIncomeData?.length || 0,
       })
 
       // פירוט לפי קטגוריה
@@ -397,6 +424,10 @@ export default function DashboardPage() {
         }
         matchedTransactions={stats.matchedTransactions}
         unmatchedTransactions={stats.unmatchedTransactions}
+        futureIncome={stats.futureIncome}
+        overdueIncome={stats.overdueIncome}
+        futureCount={stats.futureCount}
+        overdueCount={stats.overdueCount}
       />
 
       {/* Charts Row */}
