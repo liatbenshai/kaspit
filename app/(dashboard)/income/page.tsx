@@ -13,7 +13,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { ExcelImport } from '@/components/import/ExcelImport'
 import { supabase } from '@/lib/supabase'
 import { formatCurrency, formatDateShort, translateStatus, getStatusColor } from '@/lib/utils'
-import { Plus, Upload, Search, Pencil, Trash2, FileText, Link2, AlertTriangle, Check, X, Square, CheckSquare, Filter } from 'lucide-react'
+import { Plus, Upload, Search, Pencil, Trash2, FileText, Link2, AlertTriangle, Check, X, Square, CheckSquare, Filter, Clock } from 'lucide-react'
 import type { Income, Category, Customer, IncomeDocumentType, DocumentStatus } from '@/types'
 
 const VAT_RATE = 0.18
@@ -29,6 +29,67 @@ const paymentMethods = [
   { value: 'check', label: 'צ׳ק' },
   { value: 'bit', label: 'ביט / פייבוקס' },
 ]
+
+// תנאי תשלום
+const paymentTermsOptions = [
+  { value: '', label: 'בחר תנאי תשלום' },
+  { value: 'immediate', label: 'מיידי' },
+  { value: 'eom', label: 'שוטף (סוף חודש)' },
+  { value: 'eom_plus_30', label: 'שוטף + 30' },
+  { value: 'eom_plus_45', label: 'שוטף + 45' },
+  { value: 'eom_plus_60', label: 'שוטף + 60' },
+  { value: 'eom_plus_90', label: 'שוטף + 90' },
+  { value: 'net_30', label: '30 יום' },
+  { value: 'net_45', label: '45 יום' },
+  { value: 'net_60', label: '60 יום' },
+  { value: 'custom', label: 'מותאם אישית' },
+]
+
+// חישוב תאריך לתשלום
+const calculateDueDate = (invoiceDate: string, terms: string): string => {
+  if (!invoiceDate || !terms) return ''
+  
+  const date = new Date(invoiceDate)
+  
+  // חישוב סוף החודש
+  const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0)
+  
+  switch (terms) {
+    case 'immediate':
+      return invoiceDate
+    case 'eom':
+      return endOfMonth.toISOString().split('T')[0]
+    case 'eom_plus_30':
+      endOfMonth.setDate(endOfMonth.getDate() + 30)
+      return endOfMonth.toISOString().split('T')[0]
+    case 'eom_plus_45':
+      endOfMonth.setDate(endOfMonth.getDate() + 45)
+      return endOfMonth.toISOString().split('T')[0]
+    case 'eom_plus_60':
+      endOfMonth.setDate(endOfMonth.getDate() + 60)
+      return endOfMonth.toISOString().split('T')[0]
+    case 'eom_plus_90':
+      endOfMonth.setDate(endOfMonth.getDate() + 90)
+      return endOfMonth.toISOString().split('T')[0]
+    case 'net_30':
+      date.setDate(date.getDate() + 30)
+      return date.toISOString().split('T')[0]
+    case 'net_45':
+      date.setDate(date.getDate() + 45)
+      return date.toISOString().split('T')[0]
+    case 'net_60':
+      date.setDate(date.getDate() + 60)
+      return date.toISOString().split('T')[0]
+    default:
+      return '' // custom
+  }
+}
+
+// בדיקה אם עבר תאריך התשלום
+const isOverdue = (dueDate: string | null, paymentStatus: string): boolean => {
+  if (!dueDate || paymentStatus === 'paid') return false
+  return new Date(dueDate) < new Date()
+}
 
 // סוגי מסמכים להכנסות
 const incomeDocumentTypes = [
@@ -113,6 +174,8 @@ export default function IncomePage() {
     document_type: 'tax_invoice' as IncomeDocumentType,
     linked_document_id: '',
     date: new Date().toISOString().split('T')[0],
+    due_date: '',
+    payment_terms: '',
     description: '',
     invoice_number: '',
     payment_status: 'pending' as 'pending' | 'partial' | 'paid',
@@ -157,6 +220,19 @@ export default function IncomePage() {
       }))
     }
   }, [formData.amount_before_vat, formData.amount, formData.vat_exempt, formData.document_type, inputMode])
+
+  // חישוב תאריך לתשלום אוטומטי
+  useEffect(() => {
+    if (formData.payment_terms && formData.payment_terms !== 'custom' && formData.date) {
+      const calculatedDueDate = calculateDueDate(formData.date, formData.payment_terms)
+      if (calculatedDueDate) {
+        setFormData(prev => ({
+          ...prev,
+          due_date: calculatedDueDate
+        }))
+      }
+    }
+  }, [formData.payment_terms, formData.date])
 
   const loadData = async () => {
     try {
@@ -229,6 +305,8 @@ export default function IncomePage() {
         document_status: documentStatus,
         linked_document_id: formData.linked_document_id || null,
         date: formData.date,
+        due_date: formData.due_date || null,
+        payment_terms: formData.payment_terms || null,
         description: formData.description || null,
         invoice_number: formData.invoice_number || null,
         payment_status: formData.payment_status,
@@ -301,6 +379,8 @@ export default function IncomePage() {
       document_type: item.document_type || 'tax_invoice',
       linked_document_id: item.linked_document_id || '',
       date: item.date,
+      due_date: item.due_date || '',
+      payment_terms: (item as any).payment_terms || '',
       description: item.description || '',
       invoice_number: item.invoice_number || '',
       payment_status: item.payment_status,
@@ -406,6 +486,8 @@ export default function IncomePage() {
       document_type: 'tax_invoice',
       linked_document_id: '',
       date: new Date().toISOString().split('T')[0],
+      due_date: '',
+      payment_terms: '',
       description: '',
       invoice_number: '',
       payment_status: 'pending',
@@ -534,6 +616,24 @@ export default function IncomePage() {
     .filter(i => isVatDocument(i.document_type))
     .reduce((sum, item) => sum + Number(item.vat_amount || 0), 0)
   const totalBeforeVat = filteredIncome.reduce((sum, item) => sum + Number(item.amount_before_vat || item.amount), 0)
+
+  // חישוב הכנסות ממתינות לתשלום (פתוחות)
+  const pendingPayments = income.filter(i => 
+    i.payment_status !== 'paid' && i.document_status === 'open'
+  )
+  const totalPending = pendingPayments.reduce((sum, item) => sum + Number(item.amount), 0)
+
+  // חישוב הכנסות באיחור
+  const overduePayments = income.filter(i => isOverdue(i.due_date, i.payment_status))
+  const totalOverdue = overduePayments.reduce((sum, item) => sum + Number(item.amount), 0)
+
+  // חישוב הכנסות עתידיות (עם תאריך לתשלום בעתיד)
+  const futurePayments = income.filter(i => 
+    i.due_date && 
+    new Date(i.due_date) > new Date() && 
+    i.payment_status !== 'paid'
+  )
+  const totalFuture = futurePayments.reduce((sum, item) => sum + Number(item.amount), 0)
 
   if (loading) {
     return (
@@ -732,20 +832,36 @@ export default function IncomePage() {
       </Card>
 
       {/* Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <p className="text-sm text-gray-500">לפני מע״מ</p>
-          <p className="text-xl font-bold text-gray-900">{formatCurrency(totalBeforeVat)}</p>
-        </div>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm text-blue-600">מע״מ עסקאות (מחשבוניות מס)</p>
-          <p className="text-xl font-bold text-blue-700">{formatCurrency(totalVat)}</p>
-        </div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-success-50 border border-success-200 rounded-lg p-4">
-          <p className="text-sm text-success-600">סה״כ</p>
+          <p className="text-sm text-success-600">סה״כ (מסוננים)</p>
           <p className="text-xl font-bold text-success-700">{formatCurrency(totalAmount)}</p>
           <p className="text-xs text-success-600">{filteredIncome.length} מסמכים</p>
         </div>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <p className="text-sm text-blue-600">מע״מ עסקאות</p>
+          <p className="text-xl font-bold text-blue-700">{formatCurrency(totalVat)}</p>
+        </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <p className="text-sm text-amber-600">ממתין לתשלום</p>
+          <p className="text-xl font-bold text-amber-700">{formatCurrency(totalPending)}</p>
+          <p className="text-xs text-amber-600">{pendingPayments.length} מסמכים</p>
+        </div>
+        <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
+          <p className="text-sm text-primary-600">הכנסות עתידיות</p>
+          <p className="text-xl font-bold text-primary-700">{formatCurrency(totalFuture)}</p>
+          <p className="text-xs text-primary-600">{futurePayments.length} מסמכים</p>
+        </div>
+        {totalOverdue > 0 && (
+          <div className="bg-danger-50 border border-danger-200 rounded-lg p-4">
+            <p className="text-sm text-danger-600 flex items-center gap-1">
+              <Clock className="w-4 h-4" />
+              באיחור!
+            </p>
+            <p className="text-xl font-bold text-danger-700">{formatCurrency(totalOverdue)}</p>
+            <p className="text-xs text-danger-600">{overduePayments.length} מסמכים</p>
+          </div>
+        )}
       </div>
 
       {/* Table */}
@@ -771,17 +887,16 @@ export default function IncomePage() {
               <TableHead>תיאור</TableHead>
               <TableHead>לקוח</TableHead>
               <TableHead>סכום</TableHead>
-              <TableHead>מע״מ</TableHead>
+              <TableHead>לתשלום</TableHead>
               <TableHead>אמצעי תשלום</TableHead>
-              <TableHead>סטטוס מסמך</TableHead>
-              <TableHead>תשלום</TableHead>
+              <TableHead>סטטוס</TableHead>
               <TableHead>פעולות</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredIncome.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={12} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={11} className="text-center py-8 text-gray-500">
                   אין מסמכים להצגה
                 </TableCell>
               </TableRow>
@@ -826,10 +941,17 @@ export default function IncomePage() {
                   <TableCell className="font-semibold">
                     {formatCurrency(item.amount)}
                   </TableCell>
-                  <TableCell className="text-blue-600">
-                    {isVatDocument(item.document_type) && item.vat_amount 
-                      ? formatCurrency(item.vat_amount) 
-                      : '-'}
+                  <TableCell>
+                    {item.due_date ? (
+                      <div className={`flex items-center gap-1 ${isOverdue(item.due_date, item.payment_status) ? 'text-danger-600' : ''}`}>
+                        {isOverdue(item.due_date, item.payment_status) && (
+                          <Clock className="w-4 h-4" />
+                        )}
+                        <span className="text-sm">{formatDateShort(item.due_date)}</span>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 text-sm">-</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {(item as any).payment_method ? (
@@ -841,14 +963,14 @@ export default function IncomePage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={documentStatusColors[item.document_status] as any}>
-                      {documentStatusLabels[item.document_status]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusColor(item.payment_status) as any}>
-                      {translateStatus(item.payment_status)}
-                    </Badge>
+                    <div className="flex flex-col gap-1">
+                      <Badge variant={documentStatusColors[item.document_status] as any} size="sm">
+                        {documentStatusLabels[item.document_status]}
+                      </Badge>
+                      <Badge variant={getStatusColor(item.payment_status) as any} size="sm">
+                        {translateStatus(item.payment_status)}
+                      </Badge>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -1026,6 +1148,24 @@ export default function IncomePage() {
             onChange={(e) => setFormData({ ...formData, date: e.target.value })}
             required
           />
+
+          {/* תנאי תשלום ותאריך לתשלום */}
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="תנאי תשלום"
+              options={paymentTermsOptions}
+              value={formData.payment_terms}
+              onChange={(e) => setFormData({ ...formData, payment_terms: e.target.value })}
+            />
+            <Input
+              label="תאריך לתשלום"
+              type="date"
+              value={formData.due_date}
+              onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+              disabled={formData.payment_terms !== '' && formData.payment_terms !== 'custom'}
+              className={formData.payment_terms !== '' && formData.payment_terms !== 'custom' ? 'bg-gray-50' : ''}
+            />
+          </div>
 
           <Input
             label="תיאור"
