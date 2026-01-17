@@ -432,7 +432,7 @@ export default function IncomePage() {
   })
 
   // שנים זמינות לסינון
-  const availableYears = [...new Set(income.map(i => new Date(i.date).getFullYear()))].sort((a, b) => b - a)
+  const availableYears = Array.from(new Set(income.map(i => new Date(i.date).getFullYear()))).sort((a, b) => b - a)
 
   // פונקציות בחירה מרובה
   const toggleSelectItem = (id: string) => {

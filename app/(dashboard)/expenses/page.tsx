@@ -395,7 +395,7 @@ export default function ExpensesPage() {
   })
 
   // שנים זמינות לסינון
-  const availableYears = [...new Set(expenses.map(e => new Date(e.date).getFullYear()))].sort((a, b) => b - a)
+  const availableYears = Array.from(new Set(expenses.map(e => new Date(e.date).getFullYear()))).sort((a, b) => b - a)
 
   // פונקציות בחירה מרובה
   const toggleSelectItem = (id: string) => {
