@@ -94,7 +94,13 @@ export default function IncomePage() {
   // בחירה מרובה
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showBulkUpdateModal, setShowBulkUpdateModal] = useState(false)
-  const [bulkPaymentMethod, setBulkPaymentMethod] = useState<string>('')
+  const [bulkUpdateData, setBulkUpdateData] = useState({
+    payment_method: '',
+    category_id: '',
+    customer_id: '',
+    payment_status: '',
+  })
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -461,24 +467,40 @@ export default function IncomePage() {
 
   // עדכון המוני
   const handleBulkUpdate = async () => {
-    if (selectedIds.size === 0 || !bulkPaymentMethod) return
+    if (selectedIds.size === 0) return
+
+    // בניית אובייקט העדכון רק עם שדות שנבחרו
+    const updateData: Record<string, any> = {}
+    if (bulkUpdateData.payment_method) updateData.payment_method = bulkUpdateData.payment_method
+    if (bulkUpdateData.category_id) updateData.category_id = bulkUpdateData.category_id
+    if (bulkUpdateData.customer_id) updateData.customer_id = bulkUpdateData.customer_id
+    if (bulkUpdateData.payment_status) updateData.payment_status = bulkUpdateData.payment_status
+
+    if (Object.keys(updateData).length === 0) {
+      setError('יש לבחור לפחות שדה אחד לעדכון')
+      return
+    }
 
     try {
       const { error } = await supabase
         .from('income')
-        .update({ payment_method: bulkPaymentMethod })
+        .update(updateData)
         .in('id', Array.from(selectedIds))
 
       if (error) throw error
 
       setSuccessMessage(`עודכנו ${selectedIds.size} הכנסות בהצלחה!`)
       setShowBulkUpdateModal(false)
-      setBulkPaymentMethod('')
+      setBulkUpdateData({ payment_method: '', category_id: '', customer_id: '', payment_status: '' })
       clearSelection()
       loadData()
     } catch (err: any) {
       setError(`שגיאה בעדכון: ${err.message}`)
     }
+  }
+
+  const resetBulkUpdate = () => {
+    setBulkUpdateData({ payment_method: '', category_id: '', customer_id: '', payment_status: '' })
   }
 
   // איפוס כל הסינונים
@@ -576,7 +598,7 @@ export default function IncomePage() {
             </div>
             <div className="flex items-center gap-2">
               <Button size="sm" onClick={() => setShowBulkUpdateModal(true)}>
-                עדכון אמצעי תשלום
+                עדכון שדות
               </Button>
               <Button size="sm" variant="outline" onClick={clearSelection}>
                 ביטול בחירה
@@ -589,8 +611,8 @@ export default function IncomePage() {
       {/* Filters */}
       <Card padding="md">
         <div className="space-y-4">
-          {/* שורה ראשונה */}
-          <div className="flex flex-wrap gap-4">
+          {/* שורה ראשית - חיפוש + כפתור סינון */}
+          <div className="flex flex-wrap gap-4 items-center">
             <div className="flex-1 min-w-[200px]">
               <div className="relative">
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -602,100 +624,110 @@ export default function IncomePage() {
                 />
               </div>
             </div>
-            <Select
-              options={[
-                { value: '', label: 'כל סוגי המסמכים' },
-                ...incomeDocumentTypes
-              ]}
-              value={filterDocType}
-              onChange={(e) => setFilterDocType(e.target.value)}
-            />
-            <Select
-              options={[
-                { value: '', label: 'כל הסטטוסים' },
-                { value: 'open', label: 'פתוח' },
-                { value: 'closed', label: 'סגור' },
-                { value: 'cancelled', label: 'מבוטל' },
-              ]}
-              value={filterDocStatus}
-              onChange={(e) => setFilterDocStatus(e.target.value)}
-            />
-            <Select
-              options={[
-                { value: '', label: 'כל סטטוסי התשלום' },
-                { value: 'pending', label: 'ממתין' },
-                { value: 'partial', label: 'שולם חלקית' },
-                { value: 'paid', label: 'שולם' },
-              ]}
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-            />
-          </div>
-
-          {/* שורה שנייה - סינונים נוספים */}
-          <div className="flex flex-wrap gap-4">
-            <Select
-              options={[
-                { value: '', label: 'כל אמצעי התשלום' },
-                { value: 'bank_transfer', label: 'העברה בנקאית' },
-                { value: 'credit_card', label: 'כרטיס אשראי' },
-                { value: 'cash', label: 'מזומן' },
-                { value: 'check', label: 'צ׳ק' },
-                { value: 'bit', label: 'ביט / פייבוקס' },
-              ]}
-              value={filterPaymentMethod}
-              onChange={(e) => setFilterPaymentMethod(e.target.value)}
-            />
-            <Select
-              options={[
-                { value: '', label: 'כל הקטגוריות' },
-                ...categories.map(c => ({ value: c.id, label: c.name }))
-              ]}
-              value={filterCategory}
-              onChange={(e) => setFilterCategory(e.target.value)}
-            />
-            <Select
-              options={[
-                { value: '', label: 'כל הלקוחות' },
-                ...customers.map(c => ({ value: c.id, label: c.name }))
-              ]}
-              value={filterCustomer}
-              onChange={(e) => setFilterCustomer(e.target.value)}
-            />
-            <Select
-              options={[
-                { value: '', label: 'כל החודשים' },
-                { value: '1', label: 'ינואר' },
-                { value: '2', label: 'פברואר' },
-                { value: '3', label: 'מרץ' },
-                { value: '4', label: 'אפריל' },
-                { value: '5', label: 'מאי' },
-                { value: '6', label: 'יוני' },
-                { value: '7', label: 'יולי' },
-                { value: '8', label: 'אוגוסט' },
-                { value: '9', label: 'ספטמבר' },
-                { value: '10', label: 'אוקטובר' },
-                { value: '11', label: 'נובמבר' },
-                { value: '12', label: 'דצמבר' },
-              ]}
-              value={filterMonth}
-              onChange={(e) => setFilterMonth(e.target.value)}
-            />
-            <Select
-              options={[
-                { value: '', label: 'כל השנים' },
-                ...availableYears.map(y => ({ value: y.toString(), label: y.toString() }))
-              ]}
-              value={filterYear}
-              onChange={(e) => setFilterYear(e.target.value)}
-            />
+            <Button 
+              variant={showAdvancedFilters ? 'primary' : 'outline'} 
+              size="sm"
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            >
+              <Filter className="w-4 h-4" />
+              סינון {hasActiveFilters && `(${[filterStatus, filterDocType, filterDocStatus, filterPaymentMethod, filterCategory, filterCustomer, filterMonth, filterYear].filter(Boolean).length})`}
+            </Button>
             {hasActiveFilters && (
               <Button variant="ghost" size="sm" onClick={clearFilters}>
                 <X className="w-4 h-4" />
-                נקה סינונים
+                נקה
               </Button>
             )}
           </div>
+
+          {/* סינונים מתקדמים - מוסתרים כברירת מחדל */}
+          {showAdvancedFilters && (
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 pt-3 border-t">
+              <Select
+                options={[
+                  { value: '', label: 'סוג מסמך' },
+                  ...incomeDocumentTypes
+                ]}
+                value={filterDocType}
+                onChange={(e) => setFilterDocType(e.target.value)}
+              />
+              <Select
+                options={[
+                  { value: '', label: 'סטטוס מסמך' },
+                  { value: 'open', label: 'פתוח' },
+                  { value: 'closed', label: 'סגור' },
+                  { value: 'cancelled', label: 'מבוטל' },
+                ]}
+                value={filterDocStatus}
+                onChange={(e) => setFilterDocStatus(e.target.value)}
+              />
+              <Select
+                options={[
+                  { value: '', label: 'סטטוס תשלום' },
+                  { value: 'pending', label: 'ממתין' },
+                  { value: 'partial', label: 'שולם חלקית' },
+                  { value: 'paid', label: 'שולם' },
+                ]}
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+              />
+              <Select
+                options={[
+                  { value: '', label: 'אמצעי תשלום' },
+                  { value: 'bank_transfer', label: 'העברה בנקאית' },
+                  { value: 'credit_card', label: 'כרטיס אשראי' },
+                  { value: 'cash', label: 'מזומן' },
+                  { value: 'check', label: 'צ׳ק' },
+                  { value: 'bit', label: 'ביט / פייבוקס' },
+                ]}
+                value={filterPaymentMethod}
+                onChange={(e) => setFilterPaymentMethod(e.target.value)}
+              />
+              <Select
+                options={[
+                  { value: '', label: 'קטגוריה' },
+                  ...categories.map(c => ({ value: c.id, label: c.name }))
+                ]}
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+              />
+              <Select
+                options={[
+                  { value: '', label: 'לקוח' },
+                  ...customers.map(c => ({ value: c.id, label: c.name }))
+                ]}
+                value={filterCustomer}
+                onChange={(e) => setFilterCustomer(e.target.value)}
+              />
+              <Select
+                options={[
+                  { value: '', label: 'חודש' },
+                  { value: '1', label: 'ינואר' },
+                  { value: '2', label: 'פברואר' },
+                  { value: '3', label: 'מרץ' },
+                  { value: '4', label: 'אפריל' },
+                  { value: '5', label: 'מאי' },
+                  { value: '6', label: 'יוני' },
+                  { value: '7', label: 'יולי' },
+                  { value: '8', label: 'אוגוסט' },
+                  { value: '9', label: 'ספטמבר' },
+                  { value: '10', label: 'אוקטובר' },
+                  { value: '11', label: 'נובמבר' },
+                  { value: '12', label: 'דצמבר' },
+                ]}
+                value={filterMonth}
+                onChange={(e) => setFilterMonth(e.target.value)}
+              />
+              <Select
+                options={[
+                  { value: '', label: 'שנה' },
+                  ...availableYears.map(y => ({ value: y.toString(), label: y.toString() }))
+                ]}
+                value={filterYear}
+                onChange={(e) => setFilterYear(e.target.value)}
+              />
+            </div>
+          )}
         </div>
       </Card>
 
@@ -1165,22 +1197,59 @@ export default function IncomePage() {
         isOpen={showBulkUpdateModal}
         onClose={() => {
           setShowBulkUpdateModal(false)
-          setBulkPaymentMethod('')
+          resetBulkUpdate()
         }}
         title={`עדכון ${selectedIds.size} הכנסות`}
       >
         <div className="space-y-4">
-          <p className="text-gray-600">
-            בחרי את אמצעי התשלום לעדכון עבור {selectedIds.size} ההכנסות שנבחרו:
+          <p className="text-gray-600 text-sm">
+            בחרי את השדות לעדכון. רק שדות עם ערך נבחר יעודכנו:
           </p>
+          
           <Select
             label="אמצעי תשלום"
-            options={paymentMethods.filter(p => p.value !== '')}
-            value={bulkPaymentMethod}
-            onChange={(e) => setBulkPaymentMethod(e.target.value)}
+            options={[
+              { value: '', label: '-- ללא שינוי --' },
+              ...paymentMethods.filter(p => p.value !== '')
+            ]}
+            value={bulkUpdateData.payment_method}
+            onChange={(e) => setBulkUpdateData(prev => ({ ...prev, payment_method: e.target.value }))}
           />
-          <div className="flex gap-3 pt-4">
-            <Button onClick={handleBulkUpdate} disabled={!bulkPaymentMethod}>
+          
+          <Select
+            label="קטגוריה"
+            options={[
+              { value: '', label: '-- ללא שינוי --' },
+              ...categories.map(c => ({ value: c.id, label: c.name }))
+            ]}
+            value={bulkUpdateData.category_id}
+            onChange={(e) => setBulkUpdateData(prev => ({ ...prev, category_id: e.target.value }))}
+          />
+          
+          <Select
+            label="לקוח"
+            options={[
+              { value: '', label: '-- ללא שינוי --' },
+              ...customers.map(c => ({ value: c.id, label: c.name }))
+            ]}
+            value={bulkUpdateData.customer_id}
+            onChange={(e) => setBulkUpdateData(prev => ({ ...prev, customer_id: e.target.value }))}
+          />
+          
+          <Select
+            label="סטטוס תשלום"
+            options={[
+              { value: '', label: '-- ללא שינוי --' },
+              { value: 'pending', label: 'ממתין' },
+              { value: 'partial', label: 'שולם חלקית' },
+              { value: 'paid', label: 'שולם' },
+            ]}
+            value={bulkUpdateData.payment_status}
+            onChange={(e) => setBulkUpdateData(prev => ({ ...prev, payment_status: e.target.value }))}
+          />
+
+          <div className="flex gap-3 pt-4 border-t">
+            <Button onClick={handleBulkUpdate}>
               <Check className="w-4 h-4" />
               עדכן {selectedIds.size} הכנסות
             </Button>
@@ -1188,7 +1257,7 @@ export default function IncomePage() {
               variant="outline"
               onClick={() => {
                 setShowBulkUpdateModal(false)
-                setBulkPaymentMethod('')
+                resetBulkUpdate()
               }}
             >
               ביטול
