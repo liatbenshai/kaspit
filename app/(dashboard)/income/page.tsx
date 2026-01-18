@@ -430,15 +430,6 @@ export default function IncomePage() {
     'חשבונית רגילה': 'amount',
   }
 
-  const statusMap: Record<string, string> = {
-    'שולם': 'paid',
-    'ממתין': 'pending',
-    'שולם חלקית': 'partial',
-    'paid': 'paid',
-    'pending': 'pending',
-    'partial': 'partial',
-  }
-
   // מיפוי תנאי תשלום מעברית לאנגלית
   const paymentTermsMap: Record<string, string> = {
     'מיידי': 'immediate',
@@ -463,11 +454,6 @@ export default function IncomePage() {
     'net_30': 'net_30',
     'net_45': 'net_45',
     'net_60': 'net_60',
-  }
-
-  const parseBoolean = (value: any): boolean => {
-    if (value === true || value === 'true' || value === 'כן' || value === 'yes') return true
-    return false
   }
 
   const translateValue = (value: any, map: Record<string, string>, defaultValue: string): string => {
@@ -624,37 +610,6 @@ export default function IncomePage() {
     setSuccessMessage(
       `יובאו ${incomeRecords.length} מסמכים בהצלחה! ` +
       `(${businessInvoiceCount} חשבונות עיסקה, ${taxDocCount} חשבוניות מס/קבלות` +
-      (linkedCount > 0 ? `, ${linkedCount} קושרו אוטומטית` : '') + ')'
-    )
-  }
-
-    // שלב 2: ייבוא הרשומות
-    const { data: insertedRecords, error } = await supabase
-      .from('income')
-      .insert(incomeRecords.map(r => {
-        // הסרת שדה הקישור הזמני לפני השמירה
-        const { _linked_invoice_number, ...record } = r
-        return record
-      }))
-      .select()
-
-    if (error) throw error
-
-    // שלב 3: קיזוז אוטומטי - קישור חשבוניות מס לחשבוניות עסקה
-    if (insertedRecords && insertedRecords.length > 0) {
-      await performAutoLinking(incomeRecords, insertedRecords)
-    }
-
-    loadData()
-    
-    // הודעת הצלחה עם פירוט
-    const businessInvoiceCount = incomeRecords.filter(r => isBusinessInvoice(r.document_type)).length
-    const taxDocCount = incomeRecords.filter(r => canCloseInvoice(r.document_type)).length
-    const linkedCount = incomeRecords.filter(r => r._linked_invoice_number).length
-    
-    setSuccessMessage(
-      `יובאו ${incomeRecords.length} מסמכים בהצלחה! ` +
-      `(${businessInvoiceCount} חשבוניות עסקה, ${taxDocCount} חשבוניות מס` +
       (linkedCount > 0 ? `, ${linkedCount} קושרו אוטומטית` : '') + ')'
     )
   }
@@ -895,7 +850,6 @@ export default function IncomePage() {
   const totalVat = filteredIncome
     .filter(i => isVatDocument(i.document_type))
     .reduce((sum, item) => sum + Number(item.vat_amount || 0), 0)
-  const totalBeforeVat = filteredIncome.reduce((sum, item) => sum + Number(item.amount_before_vat || item.amount), 0)
 
   // חישוב הכנסות ממתינות לתשלום (פתוחות)
   const pendingPayments = income.filter(i => 
@@ -924,7 +878,6 @@ export default function IncomePage() {
   }
 
   // שדות ייבוא - תמיכה בפורמט CRM ובפורמט סטנדרטי
-  // ========================================
   const importRequiredFields = [
     // פורמט CRM
     { key: 'מספר המסמך', label: 'מספר המסמך', required: false },
