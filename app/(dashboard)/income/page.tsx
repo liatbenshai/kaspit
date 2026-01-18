@@ -401,13 +401,33 @@ export default function IncomePage() {
     'חשבונית מס': 'tax_invoice',
     'חשבונית מס קבלה': 'tax_invoice_receipt',
     'הודעת זיכוי': 'credit_note',
+    'חשבונית זיכוי': 'credit_note',
     'חשבונית עסקה': 'invoice',
+    'חשבון עיסקה': 'invoice',  // תמיכה בפורמט CRM
     'קבלה': 'receipt',
     'tax_invoice': 'tax_invoice',
     'tax_invoice_receipt': 'tax_invoice_receipt',
     'credit_note': 'credit_note',
     'invoice': 'invoice',
     'receipt': 'receipt',
+  }
+  
+  // מיפוי סטטוסים מה-CRM
+  const documentStatusMap: Record<string, { docStatus: string, payStatus: string }> = {
+    'מסמך סגור': { docStatus: 'closed', payStatus: 'paid' },
+    'פתוח': { docStatus: 'open', payStatus: 'pending' },
+  }
+  
+  // מיפוי שמות עמודות מה-CRM לשמות הסטנדרטיים
+  const columnMapping: Record<string, string> = {
+    'מספר המסמך': 'invoice_number',
+    'סוג מסמך': 'document_type',
+    'שם הלקוח': 'customer_name',
+    'תאריך המסמך': 'date',
+    'סטטוס': 'status',
+    'חשבונית ללא מע"מ (אילת וחו"ל)': 'amount_before_vat',
+    'מוכר מע"מ': 'vat_amount',
+    'חשבונית רגילה': 'amount',
   }
 
   const statusMap: Record<string, string> = {
@@ -417,6 +437,32 @@ export default function IncomePage() {
     'paid': 'paid',
     'pending': 'pending',
     'partial': 'partial',
+  }
+
+  // מיפוי תנאי תשלום מעברית לאנגלית
+  const paymentTermsMap: Record<string, string> = {
+    'מיידי': 'immediate',
+    'שוטף': 'eom',
+    'שוטף + 30': 'eom_plus_30',
+    'שוטף +30': 'eom_plus_30',
+    'שוטף + 45': 'eom_plus_45',
+    'שוטף +45': 'eom_plus_45',
+    'שוטף + 60': 'eom_plus_60',
+    'שוטף +60': 'eom_plus_60',
+    'שוטף + 90': 'eom_plus_90',
+    'שוטף +90': 'eom_plus_90',
+    '30 יום': 'net_30',
+    '45 יום': 'net_45',
+    '60 יום': 'net_60',
+    'immediate': 'immediate',
+    'eom': 'eom',
+    'eom_plus_30': 'eom_plus_30',
+    'eom_plus_45': 'eom_plus_45',
+    'eom_plus_60': 'eom_plus_60',
+    'eom_plus_90': 'eom_plus_90',
+    'net_30': 'net_30',
+    'net_45': 'net_45',
+    'net_60': 'net_60',
   }
 
   const parseBoolean = (value: any): boolean => {
@@ -436,6 +482,48 @@ export default function IncomePage() {
   const handleImport = async (data: Record<string, any>[]) => {
     if (!companyId) return
 
+    // מיפוי שמות עמודות מה-CRM לשמות סטנדרטיים
+    const normalizeRow = (row: Record<string, any>): Record<string, any> => {
+      const normalized: Record<string, any> = {}
+      for (const [key, value] of Object.entries(row)) {
+        const mappedKey = columnMapping[key] || key
+        normalized[mappedKey] = value
+      }
+      return normalized
+    }
+
+    // המרת תאריך מפורמט DD.MM.YYYY לפורמט YYYY-MM-DD
+    const parseDate = (dateStr: string): string => {
+      if (!dateStr) return new Date().toISOString().split('T')[0]
+      const str = String(dateStr).trim()
+      // פורמט DD.MM.YYYY
+      const ddmmyyyy = str.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/)
+      if (ddmmyyyy) {
+        const [, day, month, year] = ddmmyyyy
+        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+      }
+      // פורמט YYYY-MM-DD (כבר תקין)
+      if (str.match(/^\d{4}-\d{2}-\d{2}$/)) return str
+      // ניסיון לפרסר כתאריך
+      const parsed = new Date(str)
+      if (!isNaN(parsed.getTime())) {
+        return parsed.toISOString().split('T')[0]
+      }
+      return new Date().toISOString().split('T')[0]
+    }
+
+    // מציאת לקוח לפי שם
+    const findCustomerId = (customerName: string | undefined): string | null => {
+      if (!customerName) return null
+      const name = String(customerName).trim()
+      const customer = customers.find(c => 
+        c.name === name || 
+        c.name.includes(name) || 
+        name.includes(c.name)
+      )
+      return customer?.id || null
+    }
+
     // מציאת קטגוריה לפי שם
     const findCategoryId = (categoryName: string | undefined): string | null => {
       if (!categoryName) return null
@@ -447,47 +535,98 @@ export default function IncomePage() {
       return cat?.id || null
     }
 
-    // מציאת לקוח לפי שם
-    const findCustomerId = (customerName: string | undefined): string | null => {
-      if (!customerName) return null
-      const customer = customers.find(c => 
-        c.name === customerName || 
-        c.name.includes(customerName) || 
-        customerName.includes(c.name)
-      )
-      return customer?.id || null
-    }
-
     // שלב 1: הכנת רשומות לייבוא
-    const incomeRecords = data.map(row => {
-      const amountBeforeVat = parseFloat(row.amount_before_vat) || 0
-      const vatExempt = parseBoolean(row.vat_exempt)
+    const incomeRecords = data.map(rawRow => {
+      const row = normalizeRow(rawRow)
+      
+      // סכומים - תמיכה בשני הפורמטים
+      const amountTotal = parseFloat(row.amount) || 0
+      const amountBeforeVat = parseFloat(row.amount_before_vat) || amountTotal
+      const vatAmountFromFile = parseFloat(row.vat_amount) || 0
+      
       const docType = translateValue(row.document_type, documentTypeMap, 'tax_invoice')
-      const paymentStatus = translateValue(row.payment_status, statusMap, 'pending')
-      const hasVat = !vatExempt && isVatDocument(docType)
-      const vatAmount = hasVat ? Math.round(amountBeforeVat * VAT_RATE * 100) / 100 : 0
-      const amount = Math.round((amountBeforeVat + vatAmount) * 100) / 100
-      const categoryId = findCategoryId(row.category_name)
+      
+      // סטטוס מה-CRM
+      const crmStatus = row.status || row.payment_status || ''
+      const statusMapping = documentStatusMap[crmStatus] || { docStatus: 'open', payStatus: 'pending' }
+      
+      // אם זה חשבון עיסקה, הסטטוס נקבע לפי ה-CRM
+      let documentStatus = statusMapping.docStatus
+      let paymentStatus = statusMapping.payStatus
+      
+      // עבור חשבון עיסקה - אם ה-CRM אומר "פתוח" זה באמת פתוח
+      if (isBusinessInvoice(docType)) {
+        documentStatus = statusMapping.docStatus === 'closed' ? 'closed' : 'open'
+      } else {
+        // מסמכי מס תמיד סגורים
+        documentStatus = 'closed'
+      }
+
       const customerId = findCustomerId(row.customer_name)
+      const categoryId = findCategoryId(row.category_name)
+      
+      // תנאי תשלום ותאריך לתשלום
+      const paymentTerms = translateValue(row.payment_terms, paymentTermsMap, '')
+      let dueDate = row.due_date ? parseDate(row.due_date) : null
+      
+      // אם יש תנאי תשלום אבל אין תאריך - חשב אוטומטית
+      const docDate = parseDate(row.date)
+      if (paymentTerms && !dueDate && docDate) {
+        dueDate = calculateDueDate(docDate, paymentTerms)
+      }
 
       return {
         company_id: companyId,
         category_id: categoryId,
         customer_id: customerId,
-        amount: amount,
+        amount: amountTotal || amountBeforeVat,
         amount_before_vat: amountBeforeVat,
-        vat_amount: vatAmount,
-        vat_exempt: vatExempt,
+        vat_amount: vatAmountFromFile,
+        vat_exempt: vatAmountFromFile === 0,
         document_type: docType,
-        document_status: isBusinessInvoice(docType) ? 'open' : 'closed',
-        date: row.date || new Date().toISOString().split('T')[0],
+        document_status: documentStatus,
+        date: docDate,
+        due_date: dueDate,
+        payment_terms: paymentTerms || null,
         description: row.description || null,
-        invoice_number: row.invoice_number || null,
+        invoice_number: row.invoice_number ? String(row.invoice_number) : null,
         payment_status: paymentStatus,
-        // שדה חדש: מספר חשבונית עסקה מקושרת (לקיזוז)
+        // שדות עזר לקישור (לא נשמרים ב-DB)
+        _customer_name: row.customer_name || null,
         _linked_invoice_number: row.linked_invoice_number || null,
       }
     })
+
+    // שלב 2: ייבוא הרשומות
+    const { data: insertedRecords, error } = await supabase
+      .from('income')
+      .insert(incomeRecords.map(r => {
+        // הסרת שדות עזר לפני השמירה
+        const { _customer_name, _linked_invoice_number, ...record } = r
+        return record
+      }))
+      .select()
+
+    if (error) throw error
+
+    // שלב 3: קיזוז אוטומטי זהיר - רק התאמות יחידות!
+    let linkedCount = 0
+    if (insertedRecords && insertedRecords.length > 0) {
+      linkedCount = await performSafeAutoLinking(incomeRecords, insertedRecords)
+    }
+
+    loadData()
+    
+    // הודעת הצלחה עם פירוט
+    const businessInvoiceCount = incomeRecords.filter(r => isBusinessInvoice(r.document_type)).length
+    const taxDocCount = incomeRecords.filter(r => canCloseInvoice(r.document_type) || r.document_type === 'receipt').length
+    
+    setSuccessMessage(
+      `יובאו ${incomeRecords.length} מסמכים בהצלחה! ` +
+      `(${businessInvoiceCount} חשבונות עיסקה, ${taxDocCount} חשבוניות מס/קבלות` +
+      (linkedCount > 0 ? `, ${linkedCount} קושרו אוטומטית` : '') + ')'
+    )
+  }
 
     // שלב 2: ייבוא הרשומות
     const { data: insertedRecords, error } = await supabase
@@ -521,59 +660,79 @@ export default function IncomePage() {
   }
 
   // ========================================
-  // פונקציית קיזוז אוטומטי
+  // קיזוז אוטומטי זהיר - רק התאמות יחידות!
   // ========================================
-  const performAutoLinking = async (
+  const performSafeAutoLinking = async (
     originalRecords: any[], 
     insertedRecords: Income[]
-  ) => {
-    // מיפוי מספרי חשבוניות ל-IDs
-    const invoiceNumberToId: Record<string, string> = {}
-    insertedRecords.forEach(record => {
-      if (record.invoice_number && isBusinessInvoice(record.document_type)) {
-        invoiceNumberToId[record.invoice_number] = record.id
+  ): Promise<number> => {
+    // איסוף כל חשבונות העיסקה (חדשים + קיימים במערכת)
+    const allBusinessInvoices: { id: string; customerName: string; amount: number; date: string; invoiceNumber: string | null }[] = []
+    
+    // חשבונות עיסקה מהייבוא הנוכחי
+    insertedRecords.forEach((record, index) => {
+      if (isBusinessInvoice(record.document_type)) {
+        allBusinessInvoices.push({
+          id: record.id,
+          customerName: originalRecords[index]?._customer_name || '',
+          amount: record.amount,
+          date: record.date,
+          invoiceNumber: record.invoice_number,
+        })
       }
     })
-
-    // גם מחפש חשבוניות עסקה קיימות במערכת
-    const existingBusinessInvoices = income.filter(
+    
+    // חשבונות עיסקה קיימים במערכת (פתוחים)
+    const existingOpenInvoices = income.filter(
       i => isBusinessInvoice(i.document_type) && i.document_status === 'open'
     )
-    existingBusinessInvoices.forEach(inv => {
-      if (inv.invoice_number) {
-        invoiceNumberToId[inv.invoice_number] = inv.id
-      }
+    existingOpenInvoices.forEach(inv => {
+      allBusinessInvoices.push({
+        id: inv.id,
+        customerName: inv.customer?.name || '',
+        amount: inv.amount,
+        date: inv.date,
+        invoiceNumber: inv.invoice_number,
+      })
     })
 
     const linksToCreate: { taxDocId: string; businessInvoiceId: string }[] = []
     const invoicesToClose: string[] = []
 
-    // מעבר על הרשומות המיובאות
-    for (let i = 0; i < originalRecords.length; i++) {
-      const originalRecord = originalRecords[i]
+    // מעבר על מסמכי המס/קבלות שיובאו
+    for (let i = 0; i < insertedRecords.length; i++) {
       const insertedRecord = insertedRecords[i]
+      const originalRecord = originalRecords[i]
 
-      if (!insertedRecord || !canCloseInvoice(insertedRecord.document_type)) continue
-
-      let matchedBusinessInvoiceId: string | null = null
-
-      // אפשרות 1: קישור ישיר לפי מספר חשבונית עסקה שצוין בקובץ
-      if (originalRecord._linked_invoice_number) {
-        matchedBusinessInvoiceId = invoiceNumberToId[originalRecord._linked_invoice_number] || null
+      // רק מסמכים שיכולים לסגור חשבון עיסקה
+      if (!canCloseInvoice(insertedRecord.document_type) && insertedRecord.document_type !== 'receipt') {
+        continue
       }
 
-      // אפשרות 2: התאמה חכמה לפי סכום, לקוח ותאריך (אם לא צוין קישור)
-      if (!matchedBusinessInvoiceId) {
-        matchedBusinessInvoiceId = findSmartMatch(insertedRecord, existingBusinessInvoices)
-      }
+      const customerName = originalRecord?._customer_name || ''
+      const amount = insertedRecord.amount
 
-      if (matchedBusinessInvoiceId) {
-        linksToCreate.push({
-          taxDocId: insertedRecord.id,
-          businessInvoiceId: matchedBusinessInvoiceId
-        })
-        invoicesToClose.push(matchedBusinessInvoiceId)
+      // חיפוש התאמות לפי לקוח + סכום
+      const matches = allBusinessInvoices.filter(inv => 
+        inv.customerName === customerName && 
+        Math.abs(inv.amount - amount) < 1 &&
+        new Date(inv.date) <= new Date(insertedRecord.date) // חשבון עיסקה לפני מסמך הסגירה
+      )
+
+      // קישור רק אם יש התאמה יחידה!
+      if (matches.length === 1) {
+        const matchedInvoice = matches[0]
+        
+        // וידוא שהחשבון הזה לא כבר קושר
+        if (!invoicesToClose.includes(matchedInvoice.id)) {
+          linksToCreate.push({
+            taxDocId: insertedRecord.id,
+            businessInvoiceId: matchedInvoice.id
+          })
+          invoicesToClose.push(matchedInvoice.id)
+        }
       }
+      // אם יש 0 או 2+ התאמות - לא מקשרים, משאירים לידני
     }
 
     // ביצוע הקישורים
@@ -584,7 +743,7 @@ export default function IncomePage() {
         .eq('id', link.taxDocId)
     }
 
-    // סגירת חשבוניות העסקה שקושרו
+    // סגירת חשבונות העיסקה שקושרו
     if (invoicesToClose.length > 0) {
       await supabase
         .from('income')
@@ -592,51 +751,8 @@ export default function IncomePage() {
         .in('id', invoicesToClose)
     }
 
-    console.log(`Auto-linked ${linksToCreate.length} documents`)
-  }
-
-  // ========================================
-  // התאמה חכמה לפי סכום, לקוח ותאריך
-  // ========================================
-  const findSmartMatch = (
-    taxDoc: Income, 
-    businessInvoices: Income[]
-  ): string | null => {
-    const candidates = businessInvoices.filter(inv => {
-      // התאמת סכום (סטייה של עד 1 ש"ח)
-      const amountMatch = Math.abs(inv.amount - taxDoc.amount) <= 1
-      
-      // התאמת לקוח (אם יש)
-      const customerMatch = !taxDoc.customer_id || 
-                            !inv.customer_id || 
-                            taxDoc.customer_id === inv.customer_id
-
-      // התאמת תאריך (עד 60 יום הבדל)
-      const taxDate = new Date(taxDoc.date)
-      const invDate = new Date(inv.date)
-      const daysDiff = Math.abs((taxDate.getTime() - invDate.getTime()) / (1000 * 60 * 60 * 24))
-      const dateMatch = daysDiff <= 60
-
-      return amountMatch && customerMatch && dateMatch
-    })
-
-    // אם יש התאמה אחת בדיוק - החזר אותה
-    if (candidates.length === 1) {
-      return candidates[0].id
-    }
-
-    // אם יש כמה התאמות - בחר את הקרובה ביותר בתאריך
-    if (candidates.length > 1) {
-      const taxDate = new Date(taxDoc.date)
-      candidates.sort((a, b) => {
-        const diffA = Math.abs(new Date(a.date).getTime() - taxDate.getTime())
-        const diffB = Math.abs(new Date(b.date).getTime() - taxDate.getTime())
-        return diffA - diffB
-      })
-      return candidates[0].id
-    }
-
-    return null
+    console.log(`Safe auto-linked ${linksToCreate.length} documents (unique matches only)`)
+    return linksToCreate.length
   }
 
   const resetForm = () => {
@@ -807,20 +923,28 @@ export default function IncomePage() {
     )
   }
 
-  // ========================================
-  // שדות חובה לייבוא - מעודכן!
+  // שדות ייבוא - תמיכה בפורמט CRM ובפורמט סטנדרטי
   // ========================================
   const importRequiredFields = [
-    { key: 'amount_before_vat', label: 'סכום (לפני מע״מ)', required: true },
-    { key: 'date', label: 'תאריך', required: true },
-    { key: 'document_type', label: 'סוג מסמך', required: true }, // שונה ל-required!
+    // פורמט CRM
+    { key: 'מספר המסמך', label: 'מספר המסמך', required: false },
+    { key: 'סוג מסמך', label: 'סוג מסמך', required: false },
+    { key: 'שם הלקוח', label: 'שם הלקוח', required: false },
+    { key: 'תאריך המסמך', label: 'תאריך המסמך', required: false },
+    { key: 'סטטוס', label: 'סטטוס', required: false },
+    { key: 'חשבונית ללא מע"מ (אילת וחו"ל)', label: 'סכום לפני מע״מ', required: false },
+    { key: 'מוכר מע"מ', label: 'מע״מ', required: false },
+    { key: 'חשבונית רגילה', label: 'סכום כולל', required: false },
+    // פורמט סטנדרטי (fallback)
     { key: 'invoice_number', label: 'מספר מסמך', required: false },
-    { key: 'linked_invoice_number', label: 'מספר חשבונית עסקה מקושרת', required: false }, // חדש!
-    { key: 'customer_name', label: 'לקוח', required: false }, // חדש!
-    { key: 'category_name', label: 'קטגוריה', required: false },
+    { key: 'document_type', label: 'סוג מסמך', required: false },
+    { key: 'customer_name', label: 'לקוח', required: false },
+    { key: 'date', label: 'תאריך', required: false },
+    { key: 'amount_before_vat', label: 'סכום (לפני מע״מ)', required: false },
+    { key: 'amount', label: 'סכום', required: false },
+    { key: 'payment_terms', label: 'תנאי תשלום', required: false },
+    { key: 'due_date', label: 'תאריך לתשלום', required: false },
     { key: 'description', label: 'תיאור', required: false },
-    { key: 'vat_exempt', label: 'פטור ממע״מ', required: false },
-    { key: 'payment_status', label: 'סטטוס', required: false },
   ]
 
   return (
