@@ -109,6 +109,7 @@ export interface Income {
   linked_document_id: string | null
   payment_method: PaymentMethod | null
   date: string
+  due_date: string | null
   description: string | null
   invoice_number: string | null
   payment_status: 'pending' | 'partial' | 'paid'
