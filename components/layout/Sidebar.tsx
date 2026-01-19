@@ -17,12 +17,14 @@ import {
   LogOut,
   Calculator,
   ArrowLeftRight,
+  Wallet,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 
 const navigation = [
   { name: 'דשבורד', href: '/dashboard', icon: LayoutDashboard },
   { name: 'הכנסות', href: '/income', icon: TrendingUp },
+  { name: 'גבייה ותזרים', href: '/collection', icon: Wallet },
   { name: 'הוצאות', href: '/expenses', icon: TrendingDown },
   { name: 'תנועות בנק', href: '/bank', icon: Building2 },
   { name: 'התאמת תנועות', href: '/reconciliation', icon: ArrowLeftRight },
