@@ -420,6 +420,7 @@ export default function IncomePage() {
   
   // מיפוי שמות עמודות מה-CRM לשמות הסטנדרטיים
   const columnMapping: Record<string, string> = {
+    // פורמט CRM
     'מספר המסמך': 'invoice_number',
     'סוג מסמך': 'document_type',
     'שם הלקוח': 'customer_name',
@@ -428,6 +429,15 @@ export default function IncomePage() {
     'חשבונית ללא מע"מ (אילת וחו"ל)': 'amount_before_vat',
     'מוכר מע"מ': 'vat_amount',
     'חשבונית רגילה': 'amount',
+    // פורמט תבנית מותאמת
+    'שם לקוח': 'customer_name',
+    'מספר מסמך': 'invoice_number',
+    'תאריך': 'date',
+    'סכום כולל מע״מ': 'amount',
+    'סכום לפני מע״מ': 'amount_before_vat',
+    'מע״מ': 'vat_amount',
+    'תנאי תשלום': 'payment_terms',
+    'תיאור': 'description',
   }
 
   // מיפוי תנאי תשלום מעברית לאנגלית
@@ -548,12 +558,22 @@ export default function IncomePage() {
         documentStatus = 'closed'
       }
 
+      // קבלה וחשבונית מס קבלה = תשלום שכבר התקבל = תמיד "שולם"
+      if (docType === 'receipt' || docType === 'tax_invoice_receipt') {
+        paymentStatus = 'paid'
+      }
+
       const customerId = findCustomerId(row.customer_name)
       const categoryId = findCategoryId(row.category_name)
       
       // תנאי תשלום ותאריך לתשלום
-      const paymentTerms = translateValue(row.payment_terms, paymentTermsMap, '')
+      let paymentTerms = translateValue(row.payment_terms, paymentTermsMap, '')
       let dueDate = row.due_date ? parseDate(row.due_date) : null
+      
+      // קבלה/חשבונית מס קבלה - תנאי תשלום מיידי אם לא צוין
+      if ((docType === 'receipt' || docType === 'tax_invoice_receipt') && !paymentTerms) {
+        paymentTerms = 'immediate'
+      }
       
       // אם יש תנאי תשלום אבל אין תאריך - חשב אוטומטית
       const docDate = parseDate(row.date)
@@ -887,6 +907,7 @@ export default function IncomePage() {
     { key: 'מספר המסמך', label: 'מספר המסמך', required: false },
     { key: 'סוג מסמך', label: 'סוג מסמך', required: false },
     { key: 'שם הלקוח', label: 'שם הלקוח', required: false },
+    { key: 'שם לקוח', label: 'שם לקוח', required: false },
     { key: 'תאריך המסמך', label: 'תאריך המסמך', required: false },
     { key: 'סטטוס', label: 'סטטוס', required: false },
     { key: 'חשבונית ללא מע"מ (אילת וחו"ל)', label: 'סכום לפני מע״מ', required: false },
