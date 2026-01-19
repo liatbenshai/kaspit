@@ -365,7 +365,7 @@ export default function BankPage() {
                       {item.matched_type ? (
                         <Badge variant="success">{item.matched_type === 'income' ? 'הכנסה' : 'הוצאה'}</Badge>
                       ) : item.transaction_type && item.transaction_type !== 'regular' ? (
-                        <Badge variant="purple">מסווג</Badge>
+                        <Badge variant="info">מסווג</Badge>
                       ) : (
                         <Badge variant="default">ממתין</Badge>
                       )}

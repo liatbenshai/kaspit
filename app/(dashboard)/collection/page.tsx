@@ -43,7 +43,7 @@ const collectionStatuses = [
   { value: 'none', label: 'ללא תזכורת', color: 'default' },
   { value: 'reminder_sent', label: 'נשלחה תזכורת', color: 'warning' },
   { value: 'promised', label: 'הבטיח לשלם', color: 'info' },
-  { value: 'partial_received', label: 'שולם חלקית', color: 'purple' },
+  { value: 'partial_received', label: 'שולם חלקית', color: 'success' },
   { value: 'dispute', label: 'במחלוקת', color: 'danger' },
   { value: 'legal', label: 'טיפול משפטי', color: 'danger' },
 ]
@@ -499,7 +499,7 @@ export default function CollectionPage() {
                             </TableCell>
                             <TableCell>
                               <button onClick={() => openNotesModal(item)}>
-                                <Badge variant={getCollectionStatus(item.collection_status || 'none').color as any}>
+                                <Badge variant={getCollectionStatus(item.collection_status || 'none').color as 'default' | 'success' | 'warning' | 'danger' | 'info'}>
                                   {getCollectionStatus(item.collection_status || 'none').label}
                                 </Badge>
                               </button>
@@ -562,7 +562,7 @@ export default function CollectionPage() {
                     </TableCell>
                     <TableCell>
                       <button onClick={() => openNotesModal(item)}>
-                        <Badge variant={getCollectionStatus(item.collection_status || 'none').color as any}>
+                        <Badge variant={getCollectionStatus(item.collection_status || 'none').color as 'default' | 'success' | 'warning' | 'danger' | 'info'}>
                           {getCollectionStatus(item.collection_status || 'none').label}
                         </Badge>
                       </button>
