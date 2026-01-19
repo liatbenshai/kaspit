@@ -508,18 +508,6 @@ export default function IncomePage() {
       return new Date().toISOString().split('T')[0]
     }
 
-    // מציאת לקוח לפי שם
-    const findCustomerId = (customerName: string | undefined): string | null => {
-      if (!customerName) return null
-      const name = String(customerName).trim()
-      const customer = customers.find(c => 
-        c.name === name || 
-        c.name.includes(name) || 
-        name.includes(c.name)
-      )
-      return customer?.id || null
-    }
-
     // מציאת קטגוריה לפי שם
     const findCategoryId = (categoryName: string | undefined): string | null => {
       if (!categoryName) return null
@@ -531,7 +519,51 @@ export default function IncomePage() {
       return cat?.id || null
     }
 
-    // שלב 1: הכנת רשומות לייבוא
+    // שלב 1: איסוף שמות לקוחות ייחודיים מהקובץ
+    const uniqueCustomerNames = new Set<string>()
+    data.forEach(rawRow => {
+      const row = normalizeRow(rawRow)
+      const name = row.customer_name?.trim()
+      if (name) uniqueCustomerNames.add(name)
+    })
+
+    // שלב 2: בדיקה אילו לקוחות כבר קיימים
+    const existingCustomerNames = new Set(customers.map(c => c.name))
+    const newCustomerNames = Array.from(uniqueCustomerNames).filter(name => !existingCustomerNames.has(name))
+
+    // שלב 3: יצירת לקוחות חדשים
+    let updatedCustomers = [...customers]
+    if (newCustomerNames.length > 0) {
+      const newCustomers = newCustomerNames.map(name => ({
+        company_id: companyId,
+        name: name,
+        is_active: true,
+      }))
+      
+      // יצירה ב-batches של 100
+      const BATCH_SIZE = 100
+      for (let i = 0; i < newCustomers.length; i += BATCH_SIZE) {
+        const batch = newCustomers.slice(i, i + BATCH_SIZE)
+        const { data: inserted } = await supabase
+          .from('customers')
+          .insert(batch)
+          .select()
+        
+        if (inserted) {
+          updatedCustomers = [...updatedCustomers, ...inserted]
+        }
+      }
+    }
+
+    // פונקציה למציאת לקוח (מהרשימה המעודכנת)
+    const findCustomerId = (customerName: string | undefined): string | null => {
+      if (!customerName) return null
+      const name = String(customerName).trim()
+      const customer = updatedCustomers.find(c => c.name === name)
+      return customer?.id || null
+    }
+
+    // שלב 4: הכנת רשומות לייבוא
     const incomeRecords = data.map(rawRow => {
       const row = normalizeRow(rawRow)
       
@@ -603,22 +635,32 @@ export default function IncomePage() {
       }
     })
 
-    // שלב 2: ייבוא הרשומות
-    const { data: insertedRecords, error } = await supabase
-      .from('income')
-      .insert(incomeRecords.map(r => {
-        // הסרת שדות עזר לפני השמירה
-        const { _customer_name, _linked_invoice_number, ...record } = r
-        return record
-      }))
-      .select()
+    // שלב 5: ייבוא הרשומות ב-batches
+    const cleanRecords = incomeRecords.map(r => {
+      const { _customer_name, _linked_invoice_number, ...record } = r
+      return record
+    })
+    
+    const INCOME_BATCH_SIZE = 100
+    let allInsertedRecords: Income[] = []
+    
+    for (let i = 0; i < cleanRecords.length; i += INCOME_BATCH_SIZE) {
+      const batch = cleanRecords.slice(i, i + INCOME_BATCH_SIZE)
+      const { data: inserted, error } = await supabase
+        .from('income')
+        .insert(batch)
+        .select()
+      
+      if (error) throw error
+      if (inserted) {
+        allInsertedRecords = [...allInsertedRecords, ...inserted]
+      }
+    }
 
-    if (error) throw error
-
-    // שלב 3: קיזוז אוטומטי מהיר
+    // שלב 6: קיזוז אוטומטי מהיר
     let linkedCount = 0
-    if (insertedRecords && insertedRecords.length > 0) {
-      linkedCount = await performSafeAutoLinking(incomeRecords, insertedRecords)
+    if (allInsertedRecords.length > 0) {
+      linkedCount = await performSafeAutoLinking(incomeRecords, allInsertedRecords)
     }
 
     loadData()
@@ -628,7 +670,8 @@ export default function IncomePage() {
     const taxDocCount = incomeRecords.filter(r => canCloseInvoice(r.document_type) || r.document_type === 'receipt').length
     
     setSuccessMessage(
-      `יובאו ${incomeRecords.length} מסמכים בהצלחה! ` +
+      `יובאו ${allInsertedRecords.length} מסמכים בהצלחה! ` +
+      (newCustomerNames.length > 0 ? `נוצרו ${newCustomerNames.length} לקוחות חדשים. ` : '') +
       `(${businessInvoiceCount} חשבונות עיסקה, ${taxDocCount} חשבוניות מס/קבלות` +
       (linkedCount > 0 ? `, ${linkedCount} קושרו אוטומטית` : '') + ')'
     )
