@@ -595,7 +595,7 @@ export default function IncomePage() {
 
     if (error) throw error
 
-    // שלב 3: קיזוז אוטומטי זהיר - רק התאמות יחידות!
+    // שלב 3: קיזוז אוטומטי מהיר
     let linkedCount = 0
     if (insertedRecords && insertedRecords.length > 0) {
       linkedCount = await performSafeAutoLinking(incomeRecords, insertedRecords)
@@ -690,15 +690,19 @@ export default function IncomePage() {
       // אם יש 0 או 2+ התאמות - לא מקשרים, משאירים לידני
     }
 
-    // ביצוע הקישורים
-    for (const link of linksToCreate) {
-      await supabase
-        .from('income')
-        .update({ linked_document_id: link.businessInvoiceId })
-        .eq('id', link.taxDocId)
+    // ביצוע הקישורים במקביל (batches של 50)
+    const BATCH_SIZE = 50
+    for (let i = 0; i < linksToCreate.length; i += BATCH_SIZE) {
+      const batch = linksToCreate.slice(i, i + BATCH_SIZE)
+      await Promise.all(batch.map(link => 
+        supabase
+          .from('income')
+          .update({ linked_document_id: link.businessInvoiceId })
+          .eq('id', link.taxDocId)
+      ))
     }
 
-    // סגירת חשבונות העיסקה שקושרו
+    // סגירת חשבונות העיסקה שקושרו (בקריאה אחת)
     if (invoicesToClose.length > 0) {
       await supabase
         .from('income')
