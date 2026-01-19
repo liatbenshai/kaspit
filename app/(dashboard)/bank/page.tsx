@@ -92,21 +92,57 @@ export default function BankPage() {
     if (!companyId) return
 
     const batchId = crypto.randomUUID()
-    const records = data.map(row => ({
-      company_id: companyId,
-      bank_name: row.bank_name || null,
-      account_number: row.account_number || null,
-      date: row.date || new Date().toISOString().split('T')[0],
-      amount: parseFloat(row.amount) || 0,
-      description: row.description || null,
-      balance: row.balance ? parseFloat(row.balance) : null,
-      import_batch_id: batchId,
-    }))
+    
+    // שליפת תנועות קיימות מסווגות לזיהוי אוטומטי
+    const classifiedTransactions = transactions.filter(t => 
+      t.transaction_type && t.transaction_type !== 'regular'
+    )
+    
+    // פונקציה לזיהוי סיווג אוטומטי
+    const findMatchingClassification = (description: string, amount: number) => {
+      const match = classifiedTransactions.find(t => 
+        t.description === description && Math.abs(t.amount - amount) < 1
+      )
+      if (match) {
+        return {
+          transaction_type: match.transaction_type,
+          is_recurring: match.is_recurring,
+          recurring_label: match.recurring_label,
+        }
+      }
+      return null
+    }
+
+    let autoClassifiedCount = 0
+    const records = data.map(row => {
+      const description = row.description || null
+      const amount = parseFloat(row.amount) || 0
+      const classification = description ? findMatchingClassification(description, amount) : null
+      
+      if (classification) autoClassifiedCount++
+      
+      return {
+        company_id: companyId,
+        bank_name: row.bank_name || null,
+        account_number: row.account_number || null,
+        date: row.date || new Date().toISOString().split('T')[0],
+        amount: amount,
+        description: description,
+        balance: row.balance ? parseFloat(row.balance) : null,
+        import_batch_id: batchId,
+        transaction_type: classification?.transaction_type || 'regular',
+        is_recurring: classification?.is_recurring || false,
+        recurring_label: classification?.recurring_label || null,
+      }
+    })
 
     const { error } = await supabase.from('bank_transactions').insert(records)
     if (error) throw error
 
-    setSuccessMessage(`יובאו ${records.length} תנועות בהצלחה!`)
+    const msg = autoClassifiedCount > 0 
+      ? `יובאו ${records.length} תנועות (${autoClassifiedCount} סווגו אוטומטית!)`
+      : `יובאו ${records.length} תנועות בהצלחה!`
+    setSuccessMessage(msg)
     loadData()
   }
 

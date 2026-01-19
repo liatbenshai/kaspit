@@ -18,6 +18,7 @@ import {
   Calculator,
   ArrowLeftRight,
   Wallet,
+  Repeat,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -26,6 +27,7 @@ const navigation = [
   { name: 'הכנסות', href: '/income', icon: TrendingUp },
   { name: 'גבייה ותזרים', href: '/collection', icon: Wallet },
   { name: 'הוצאות', href: '/expenses', icon: TrendingDown },
+  { name: 'הוצאות חוזרות', href: '/recurring-expenses', icon: Repeat },
   { name: 'תנועות בנק', href: '/bank', icon: Building2 },
   { name: 'התאמת תנועות', href: '/reconciliation', icon: ArrowLeftRight },
   { name: 'תקציב', href: '/budget', icon: PieChart },
