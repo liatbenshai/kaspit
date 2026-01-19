@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 import type { Income, Customer } from '@/types'
 
-interface CollectionItem extends Income {
+interface CollectionItem extends Omit<Income, 'customer'> {
   customer?: Customer | null
   days_until_due: number
   days_overdue: number
