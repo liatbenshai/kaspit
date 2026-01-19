@@ -18,7 +18,6 @@ import type { Income, Category, Customer, IncomeDocumentType, DocumentStatus } f
 
 const VAT_RATE = 0.18
 
-// סוגי אמצעי תשלום
 type PaymentMethod = 'bank_transfer' | 'credit_card' | 'cash' | 'check' | 'bit' | ''
 
 const paymentMethods = [
@@ -30,7 +29,6 @@ const paymentMethods = [
   { value: 'bit', label: 'ביט / פייבוקס' },
 ]
 
-// תנאי תשלום
 const paymentTermsOptions = [
   { value: '', label: 'בחר תנאי תשלום' },
   { value: 'immediate', label: 'מיידי' },
@@ -45,53 +43,30 @@ const paymentTermsOptions = [
   { value: 'custom', label: 'מותאם אישית' },
 ]
 
-// חישוב תאריך לתשלום
-const calculateDueDate = (invoiceDate: string, terms: string): string => {
-  if (!invoiceDate || !terms) return ''
-  
+const calculateDueDate = (invoiceDate: string, terms: string): string | null => {
+  if (!invoiceDate || !terms) return null
   const date = new Date(invoiceDate)
-  
-  // חישוב סוף החודש
   const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0)
   
   switch (terms) {
-    case 'immediate':
-      return invoiceDate
-    case 'eom':
-      return endOfMonth.toISOString().split('T')[0]
-    case 'eom_plus_30':
-      endOfMonth.setDate(endOfMonth.getDate() + 30)
-      return endOfMonth.toISOString().split('T')[0]
-    case 'eom_plus_45':
-      endOfMonth.setDate(endOfMonth.getDate() + 45)
-      return endOfMonth.toISOString().split('T')[0]
-    case 'eom_plus_60':
-      endOfMonth.setDate(endOfMonth.getDate() + 60)
-      return endOfMonth.toISOString().split('T')[0]
-    case 'eom_plus_90':
-      endOfMonth.setDate(endOfMonth.getDate() + 90)
-      return endOfMonth.toISOString().split('T')[0]
-    case 'net_30':
-      date.setDate(date.getDate() + 30)
-      return date.toISOString().split('T')[0]
-    case 'net_45':
-      date.setDate(date.getDate() + 45)
-      return date.toISOString().split('T')[0]
-    case 'net_60':
-      date.setDate(date.getDate() + 60)
-      return date.toISOString().split('T')[0]
-    default:
-      return '' // custom
+    case 'immediate': return invoiceDate
+    case 'eom': return endOfMonth.toISOString().split('T')[0]
+    case 'eom_plus_30': endOfMonth.setDate(endOfMonth.getDate() + 30); return endOfMonth.toISOString().split('T')[0]
+    case 'eom_plus_45': endOfMonth.setDate(endOfMonth.getDate() + 45); return endOfMonth.toISOString().split('T')[0]
+    case 'eom_plus_60': endOfMonth.setDate(endOfMonth.getDate() + 60); return endOfMonth.toISOString().split('T')[0]
+    case 'eom_plus_90': endOfMonth.setDate(endOfMonth.getDate() + 90); return endOfMonth.toISOString().split('T')[0]
+    case 'net_30': date.setDate(date.getDate() + 30); return date.toISOString().split('T')[0]
+    case 'net_45': date.setDate(date.getDate() + 45); return date.toISOString().split('T')[0]
+    case 'net_60': date.setDate(date.getDate() + 60); return date.toISOString().split('T')[0]
+    default: return null
   }
 }
 
-// בדיקה אם עבר תאריך התשלום
 const isOverdue = (dueDate: string | null, paymentStatus: string): boolean => {
   if (!dueDate || paymentStatus === 'paid') return false
   return new Date(dueDate) < new Date()
 }
 
-// סוגי מסמכים להכנסות
 const incomeDocumentTypes = [
   { value: 'invoice', label: 'חשבונית עסקה' },
   { value: 'tax_invoice', label: 'חשבונית מס' },
@@ -100,34 +75,12 @@ const incomeDocumentTypes = [
   { value: 'credit_note', label: 'הודעת זיכוי' },
 ]
 
-const documentStatusLabels: Record<DocumentStatus, string> = {
-  open: 'פתוח',
-  closed: 'סגור',
-  cancelled: 'מבוטל',
-}
-
-const documentStatusColors: Record<DocumentStatus, string> = {
-  open: 'warning',
-  closed: 'success',
-  cancelled: 'default',
-}
-
-const getDocumentTypeLabel = (type: string) => {
-  return incomeDocumentTypes.find(d => d.value === type)?.label || type
-}
-
-// האם סוג המסמך מחייב מע"מ (נכלל בדוח מע"מ)
-const isVatDocument = (type: string) => {
-  return ['tax_invoice', 'tax_invoice_receipt', 'credit_note'].includes(type)
-}
-
-// האם זו חשבונית עסקה שצריכה קישור
+const documentStatusLabels: Record<DocumentStatus, string> = { open: 'פתוח', closed: 'סגור', cancelled: 'מבוטל' }
+const documentStatusColors: Record<DocumentStatus, string> = { open: 'warning', closed: 'success', cancelled: 'default' }
+const getDocumentTypeLabel = (type: string) => incomeDocumentTypes.find(d => d.value === type)?.label || type
+const isVatDocument = (type: string) => ['tax_invoice', 'tax_invoice_receipt', 'credit_note'].includes(type)
 const isBusinessInvoice = (type: string) => type === 'invoice'
-
-// האם מסמך יכול לסגור חשבונית עסקה
-const canCloseInvoice = (type: string) => {
-  return ['tax_invoice', 'tax_invoice_receipt'].includes(type)
-}
+const canCloseInvoice = (type: string) => ['tax_invoice', 'tax_invoice_receipt'].includes(type)
 
 export default function IncomePage() {
   const [income, setIncome] = useState<Income[]>([])
@@ -151,86 +104,44 @@ export default function IncomePage() {
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
-
-  // בחירה מרובה
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showBulkUpdateModal, setShowBulkUpdateModal] = useState(false)
-  const [bulkUpdateData, setBulkUpdateData] = useState({
-    payment_method: '',
-    category_id: '',
-    customer_id: '',
-    payment_status: '',
-  })
+  const [bulkUpdateData, setBulkUpdateData] = useState({ payment_method: '', category_id: '', customer_id: '', payment_status: '' })
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
-
-  // Form state
-  const [formData, setFormData] = useState({
-    category_id: '',
-    customer_id: '',
-    amount_before_vat: '',
-    vat_amount: '',
-    amount: '',
-    vat_exempt: false,
-    document_type: 'tax_invoice' as IncomeDocumentType,
-    linked_document_id: '',
-    date: new Date().toISOString().split('T')[0],
-    due_date: '',
-    payment_terms: '',
-    description: '',
-    invoice_number: '',
-    payment_status: 'pending' as 'pending' | 'partial' | 'paid',
-    payment_date: '',
-    payment_method: '' as PaymentMethod,
-  })
-
   const [inputMode, setInputMode] = useState<'before_vat' | 'total'>('before_vat')
 
-  useEffect(() => {
-    loadData()
-  }, [])
+  const [formData, setFormData] = useState({
+    category_id: '', customer_id: '', amount_before_vat: '', vat_amount: '', amount: '',
+    vat_exempt: false, document_type: 'tax_invoice' as IncomeDocumentType, linked_document_id: '',
+    date: new Date().toISOString().split('T')[0], due_date: '', payment_terms: '',
+    description: '', invoice_number: '', payment_status: 'pending' as 'pending' | 'partial' | 'paid',
+    payment_date: '', payment_method: '' as PaymentMethod,
+  })
 
-  // חישוב מע"מ אוטומטי
+  useEffect(() => { loadData() }, [])
+
   useEffect(() => {
     if (formData.vat_exempt || !isVatDocument(formData.document_type)) {
-      setFormData(prev => ({
-        ...prev,
-        vat_amount: '0',
-        amount: prev.amount_before_vat
-      }))
+      setFormData(prev => ({ ...prev, vat_amount: '0', amount: prev.amount_before_vat }))
       return
     }
-
     if (inputMode === 'before_vat' && formData.amount_before_vat) {
       const beforeVat = parseFloat(formData.amount_before_vat) || 0
       const vat = Math.round(beforeVat * VAT_RATE * 100) / 100
       const total = Math.round((beforeVat + vat) * 100) / 100
-      setFormData(prev => ({
-        ...prev,
-        vat_amount: String(vat),
-        amount: String(total)
-      }))
+      setFormData(prev => ({ ...prev, vat_amount: String(vat), amount: String(total) }))
     } else if (inputMode === 'total' && formData.amount) {
       const total = parseFloat(formData.amount) || 0
       const beforeVat = Math.round((total / (1 + VAT_RATE)) * 100) / 100
       const vat = Math.round((total - beforeVat) * 100) / 100
-      setFormData(prev => ({
-        ...prev,
-        amount_before_vat: String(beforeVat),
-        vat_amount: String(vat)
-      }))
+      setFormData(prev => ({ ...prev, amount_before_vat: String(beforeVat), vat_amount: String(vat) }))
     }
   }, [formData.amount_before_vat, formData.amount, formData.vat_exempt, formData.document_type, inputMode])
 
-  // חישוב תאריך לתשלום אוטומטי
   useEffect(() => {
     if (formData.payment_terms && formData.payment_terms !== 'custom' && formData.date) {
       const calculatedDueDate = calculateDueDate(formData.date, formData.payment_terms)
-      if (calculatedDueDate) {
-        setFormData(prev => ({
-          ...prev,
-          due_date: calculatedDueDate
-        }))
-      }
+      if (calculatedDueDate) setFormData(prev => ({ ...prev, due_date: calculatedDueDate }))
     }
   }, [formData.payment_terms, formData.date])
 
@@ -238,41 +149,18 @@ export default function IncomePage() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-
-      const { data: profile } = await supabase
-        .from('users')
-        .select('company_id')
-        .eq('id', user.id)
-        .single()
-
+      const { data: profile } = await supabase.from('users').select('company_id').eq('id', user.id).single()
       if (!profile?.company_id) return
       setCompanyId(profile.company_id)
 
-      const { data: incomeData } = await supabase
-        .from('income')
-        .select('*, category:categories(*), customer:customers(*)')
-        .eq('company_id', profile.company_id)
-        .order('date', { ascending: false })
-
+      const { data: incomeData } = await supabase.from('income').select('*, category:categories(*), customer:customers(*)').eq('company_id', profile.company_id).order('date', { ascending: false })
       setIncome(incomeData || [])
 
-      const { data: categoriesData } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('company_id', profile.company_id)
-        .eq('type', 'income')
-        .eq('is_active', true)
-
+      const { data: categoriesData } = await supabase.from('categories').select('*').eq('company_id', profile.company_id).eq('type', 'income').eq('is_active', true)
       setCategories(categoriesData || [])
 
-      const { data: customersData } = await supabase
-        .from('customers')
-        .select('*')
-        .eq('company_id', profile.company_id)
-        .eq('is_active', true)
-
+      const { data: customersData } = await supabase.from('customers').select('*').eq('company_id', profile.company_id).eq('is_active', true)
       setCustomers(customersData || [])
-
     } catch (error) {
       console.error('Error loading data:', error)
     } finally {
@@ -285,13 +173,7 @@ export default function IncomePage() {
     if (!companyId) return
 
     try {
-      // קביעת סטטוס מסמך
-      let documentStatus: DocumentStatus = 'open'
-      if (isBusinessInvoice(formData.document_type)) {
-        documentStatus = 'open' // חשבונית עסקה תמיד מתחילה פתוחה
-      } else if (!isBusinessInvoice(formData.document_type)) {
-        documentStatus = 'closed' // מסמכי מס נחשבים סגורים
-      }
+      const documentStatus: DocumentStatus = isBusinessInvoice(formData.document_type) ? 'open' : 'closed'
 
       const incomeData = {
         company_id: companyId,
@@ -315,24 +197,11 @@ export default function IncomePage() {
       }
 
       if (editingIncome) {
-        await supabase
-          .from('income')
-          .update(incomeData)
-          .eq('id', editingIncome.id)
+        await supabase.from('income').update(incomeData).eq('id', editingIncome.id)
       } else {
-        // הוספת מסמך חדש
-        const { data: newIncome } = await supabase
-          .from('income')
-          .insert(incomeData)
-          .select()
-          .single()
-
-        // אם זה מסמך שסוגר חשבונית עסקה
+        const { data: newIncome } = await supabase.from('income').insert(incomeData).select().single()
         if (newIncome && formData.linked_document_id && canCloseInvoice(formData.document_type)) {
-          await supabase
-            .from('income')
-            .update({ document_status: 'closed' })
-            .eq('id', formData.linked_document_id)
+          await supabase.from('income').update({ document_status: 'closed' }).eq('id', formData.linked_document_id)
         }
       }
 
@@ -347,18 +216,8 @@ export default function IncomePage() {
 
   const handleLinkDocument = async (businessInvoiceId: string, taxDocumentId: string) => {
     try {
-      // עדכון חשבונית המס עם הקישור
-      await supabase
-        .from('income')
-        .update({ linked_document_id: businessInvoiceId })
-        .eq('id', taxDocumentId)
-
-      // סגירת חשבונית העסקה
-      await supabase
-        .from('income')
-        .update({ document_status: 'closed' })
-        .eq('id', businessInvoiceId)
-
+      await supabase.from('income').update({ linked_document_id: businessInvoiceId }).eq('id', taxDocumentId)
+      await supabase.from('income').update({ document_status: 'closed' }).eq('id', businessInvoiceId)
       setShowLinkModal(false)
       setLinkingDocument(null)
       loadData()
@@ -396,268 +255,153 @@ export default function IncomePage() {
     loadData()
   }
 
-  // מיפוי ערכים מעברית לאנגלית
-  const documentTypeMap: Record<string, string> = {
-    'חשבונית מס': 'tax_invoice',
-    'חשבונית מס קבלה': 'tax_invoice_receipt',
-    'הודעת זיכוי': 'credit_note',
-    'חשבונית זיכוי': 'credit_note',
-    'חשבונית עסקה': 'invoice',
-    'חשבון עיסקה': 'invoice',  // תמיכה בפורמט CRM
-    'קבלה': 'receipt',
-    'tax_invoice': 'tax_invoice',
-    'tax_invoice_receipt': 'tax_invoice_receipt',
-    'credit_note': 'credit_note',
-    'invoice': 'invoice',
-    'receipt': 'receipt',
-  }
-  
-  // מיפוי סטטוסים מה-CRM
-  const documentStatusMap: Record<string, { docStatus: string, payStatus: string }> = {
-    'מסמך סגור': { docStatus: 'closed', payStatus: 'paid' },
-    'פתוח': { docStatus: 'open', payStatus: 'pending' },
-  }
-  
-  // מיפוי שמות עמודות מה-CRM לשמות הסטנדרטיים
-  const columnMapping: Record<string, string> = {
-    // פורמט CRM
-    'מספר המסמך': 'invoice_number',
-    'סוג מסמך': 'document_type',
-    'שם הלקוח': 'customer_name',
-    'תאריך המסמך': 'date',
-    'סטטוס': 'status',
-    'חשבונית ללא מע"מ (אילת וחו"ל)': 'amount_before_vat',
-    'מוכר מע"מ': 'vat_amount',
-    'חשבונית רגילה': 'amount',
-    // פורמט תבנית מותאמת
-    'שם לקוח': 'customer_name',
-    'מספר מסמך': 'invoice_number',
-    'תאריך': 'date',
-    'סכום כולל מע״מ': 'amount',
-    'סכום לפני מע״מ': 'amount_before_vat',
-    'מע״מ': 'vat_amount',
-    'תנאי תשלום': 'payment_terms',
-    'תיאור': 'description',
-  }
-
-  // מיפוי תנאי תשלום מעברית לאנגלית
-  const paymentTermsMap: Record<string, string> = {
-    'מיידי': 'immediate',
-    'שוטף': 'eom',
-    'שוטף + 30': 'eom_plus_30',
-    'שוטף +30': 'eom_plus_30',
-    'שוטף + 45': 'eom_plus_45',
-    'שוטף +45': 'eom_plus_45',
-    'שוטף + 60': 'eom_plus_60',
-    'שוטף +60': 'eom_plus_60',
-    'שוטף + 90': 'eom_plus_90',
-    'שוטף +90': 'eom_plus_90',
-    '30 יום': 'net_30',
-    '45 יום': 'net_45',
-    '60 יום': 'net_60',
-    'immediate': 'immediate',
-    'eom': 'eom',
-    'eom_plus_30': 'eom_plus_30',
-    'eom_plus_45': 'eom_plus_45',
-    'eom_plus_60': 'eom_plus_60',
-    'eom_plus_90': 'eom_plus_90',
-    'net_30': 'net_30',
-    'net_45': 'net_45',
-    'net_60': 'net_60',
-  }
-
-  const translateValue = (value: any, map: Record<string, string>, defaultValue: string): string => {
-    if (!value) return defaultValue
-    const strValue = String(value).trim()
-    return map[strValue] || defaultValue
-  }
-
   // ========================================
-  // פונקציית ייבוא מתוקנת עם קיזוז אוטומטי
+  // ייבוא הכנסות - גרסה מתוקנת ונקייה
   // ========================================
   const handleImport = async (data: Record<string, any>[]) => {
     if (!companyId) return
 
-    // מיפוי שמות עמודות מה-CRM לשמות סטנדרטיים
-    const normalizeRow = (row: Record<string, any>): Record<string, any> => {
-      const normalized: Record<string, any> = {}
-      for (const [key, value] of Object.entries(row)) {
-        const mappedKey = columnMapping[key] || key
-        normalized[mappedKey] = value
-      }
-      return normalized
+    // מיפוי סוגי מסמכים
+    const documentTypeMap: Record<string, string> = {
+      'חשבונית מס': 'tax_invoice', 'חשבונית מס קבלה': 'tax_invoice_receipt',
+      'הודעת זיכוי': 'credit_note', 'חשבונית זיכוי': 'credit_note',
+      'חשבונית עסקה': 'invoice', 'חשבון עיסקה': 'invoice', 'קבלה': 'receipt',
     }
 
-    // המרת תאריך מפורמט DD.MM.YYYY לפורמט YYYY-MM-DD
-    const parseDate = (dateStr: string): string => {
+    // מיפוי סטטוסים
+    const documentStatusMap: Record<string, { docStatus: string, payStatus: string }> = {
+      'מסמך סגור': { docStatus: 'closed', payStatus: 'paid' },
+      'פתוח': { docStatus: 'open', payStatus: 'pending' },
+    }
+
+    // מיפוי תנאי תשלום
+    const paymentTermsMap: Record<string, string> = {
+      'מיידי': 'immediate', 'שוטף': 'eom', 'שוטף + 30': 'eom_plus_30', 'שוטף +30': 'eom_plus_30',
+      'שוטף + 45': 'eom_plus_45', 'שוטף +45': 'eom_plus_45', 'שוטף + 60': 'eom_plus_60',
+      'שוטף +60': 'eom_plus_60', 'שוטף + 90': 'eom_plus_90', 'שוטף +90': 'eom_plus_90',
+    }
+
+    // פונקציה לקבלת ערך מכל שם עמודה אפשרי
+    const getValue = (row: Record<string, any>, ...keys: string[]): any => {
+      for (const key of keys) {
+        if (row[key] !== undefined && row[key] !== null && row[key] !== '') {
+          return row[key]
+        }
+      }
+      return null
+    }
+
+    // פונקציה לפרסור תאריך
+    const parseDate = (dateStr: any): string => {
       if (!dateStr) return new Date().toISOString().split('T')[0]
       const str = String(dateStr).trim()
-      // פורמט DD.MM.YYYY
       const ddmmyyyy = str.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/)
       if (ddmmyyyy) {
         const [, day, month, year] = ddmmyyyy
         return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
       }
-      // פורמט YYYY-MM-DD (כבר תקין)
       if (str.match(/^\d{4}-\d{2}-\d{2}$/)) return str
-      // ניסיון לפרסר כתאריך
       const parsed = new Date(str)
-      if (!isNaN(parsed.getTime())) {
-        return parsed.toISOString().split('T')[0]
-      }
+      if (!isNaN(parsed.getTime())) return parsed.toISOString().split('T')[0]
       return new Date().toISOString().split('T')[0]
     }
 
-    // מציאת קטגוריה לפי שם
-    const findCategoryId = (categoryName: string | undefined): string | null => {
-      if (!categoryName) return null
-      const cat = categories.find(c => 
-        c.name === categoryName || 
-        c.name.includes(categoryName) || 
-        categoryName.includes(c.name)
-      )
-      return cat?.id || null
-    }
-
-    // שלב 1: איסוף שמות לקוחות ייחודיים מהקובץ
+    // שלב 1: איסוף שמות לקוחות ייחודיים
     const uniqueCustomerNames = new Set<string>()
-    data.forEach(rawRow => {
-      const row = normalizeRow(rawRow)
-      const name = row.customer_name?.trim()
+    data.forEach(row => {
+      const name = getValue(row, 'שם לקוח', 'שם הלקוח', 'customer_name')?.toString().trim()
       if (name) uniqueCustomerNames.add(name)
     })
 
-    // שלב 2: בדיקה אילו לקוחות כבר קיימים
+    // שלב 2: יצירת לקוחות חדשים
     const existingCustomerNames = new Set(customers.map(c => c.name))
     const newCustomerNames = Array.from(uniqueCustomerNames).filter(name => !existingCustomerNames.has(name))
-
-    // שלב 3: יצירת לקוחות חדשים
+    
     let updatedCustomers = [...customers]
     if (newCustomerNames.length > 0) {
-      const newCustomers = newCustomerNames.map(name => ({
-        company_id: companyId,
-        name: name,
-        is_active: true,
-      }))
-      
-      // יצירה ב-batches של 100
       const BATCH_SIZE = 100
-      for (let i = 0; i < newCustomers.length; i += BATCH_SIZE) {
-        const batch = newCustomers.slice(i, i + BATCH_SIZE)
-        const { data: inserted } = await supabase
-          .from('customers')
-          .insert(batch)
-          .select()
-        
-        if (inserted) {
-          updatedCustomers = [...updatedCustomers, ...inserted]
-        }
+      for (let i = 0; i < newCustomerNames.length; i += BATCH_SIZE) {
+        const batch = newCustomerNames.slice(i, i + BATCH_SIZE).map(name => ({
+          company_id: companyId, name, is_active: true,
+        }))
+        const { data: inserted } = await supabase.from('customers').insert(batch).select()
+        if (inserted) updatedCustomers = [...updatedCustomers, ...inserted]
       }
     }
 
-    // פונקציה למציאת לקוח (מהרשימה המעודכנת)
-    const findCustomerId = (customerName: string | undefined): string | null => {
-      if (!customerName) return null
-      const name = String(customerName).trim()
-      const customer = updatedCustomers.find(c => c.name === name)
-      return customer?.id || null
+    // פונקציה למציאת לקוח
+    const findCustomerId = (name: string | null): string | null => {
+      if (!name) return null
+      const trimmed = String(name).trim()
+      return updatedCustomers.find(c => c.name === trimmed)?.id || null
     }
 
-    // שלב 4: הכנת רשומות לייבוא
-    const incomeRecords = data.map(rawRow => {
-      const row = normalizeRow(rawRow)
+    // שלב 3: הכנת רשומות
+    const incomeRecords = data.map(row => {
+      // קבלת ערכים מכל שם עמודה אפשרי
+      const customerName = getValue(row, 'שם לקוח', 'שם הלקוח', 'customer_name')?.toString().trim() || ''
+      const amountTotal = parseFloat(getValue(row, 'סכום כולל מע״מ', 'חשבונית רגילה', 'amount')) || 0
+      const amountBeforeVat = parseFloat(getValue(row, 'סכום לפני מע״מ', 'חשבונית ללא מע"מ (אילת וחו"ל)', 'amount_before_vat')) || amountTotal
+      const vatAmount = parseFloat(getValue(row, 'מע״מ', 'מוכר מע"מ', 'vat_amount')) || 0
       
-      // סכומים - תמיכה בשני הפורמטים
-      const amountTotal = parseFloat(row.amount) || 0
-      const amountBeforeVat = parseFloat(row.amount_before_vat) || amountTotal
-      const vatAmountFromFile = parseFloat(row.vat_amount) || 0
+      const docTypeRaw = getValue(row, 'סוג מסמך', 'document_type')?.toString().trim() || ''
+      const docType = documentTypeMap[docTypeRaw] || docTypeRaw || 'tax_invoice'
       
-      const docType = translateValue(row.document_type, documentTypeMap, 'tax_invoice')
+      const statusRaw = getValue(row, 'סטטוס', 'status')?.toString().trim() || ''
+      const statusMapping = documentStatusMap[statusRaw] || { docStatus: 'open', payStatus: 'pending' }
       
-      // סטטוס מה-CRM
-      const crmStatus = row.status || row.payment_status || ''
-      const statusMapping = documentStatusMap[crmStatus] || { docStatus: 'open', payStatus: 'pending' }
-      
-      // אם זה חשבון עיסקה, הסטטוס נקבע לפי ה-CRM
-      let documentStatus = statusMapping.docStatus
+      let documentStatus = isBusinessInvoice(docType) ? (statusMapping.docStatus === 'closed' ? 'closed' : 'open') : 'closed'
       let paymentStatus = statusMapping.payStatus
       
-      // עבור חשבון עיסקה - אם ה-CRM אומר "פתוח" זה באמת פתוח
-      if (isBusinessInvoice(docType)) {
-        documentStatus = statusMapping.docStatus === 'closed' ? 'closed' : 'open'
-      } else {
-        // מסמכי מס תמיד סגורים
-        documentStatus = 'closed'
-      }
+      // קבלה וחשבונית מס קבלה = תמיד שולם
+      if (docType === 'receipt' || docType === 'tax_invoice_receipt') paymentStatus = 'paid'
 
-      // קבלה וחשבונית מס קבלה = תשלום שכבר התקבל = תמיד "שולם"
-      if (docType === 'receipt' || docType === 'tax_invoice_receipt') {
-        paymentStatus = 'paid'
-      }
-
-      const customerId = findCustomerId(row.customer_name)
-      const categoryId = findCategoryId(row.category_name)
+      const customerId = findCustomerId(customerName)
       
-      // תנאי תשלום ותאריך לתשלום
-      let paymentTerms = translateValue(row.payment_terms, paymentTermsMap, '')
-      let dueDate = row.due_date ? parseDate(row.due_date) : null
+      const paymentTermsRaw = getValue(row, 'תנאי תשלום', 'payment_terms')?.toString().trim() || ''
+      let paymentTerms = paymentTermsMap[paymentTermsRaw] || paymentTermsRaw || ''
       
-      // קבלה/חשבונית מס קבלה/חשבונית עסקה - תנאי תשלום מיידי אם לא צוין
+      // ברירת מחדל מיידי
       if ((docType === 'receipt' || docType === 'tax_invoice_receipt' || docType === 'invoice') && !paymentTerms) {
         paymentTerms = 'immediate'
       }
       
-      // אם יש תנאי תשלום אבל אין תאריך - חשב אוטומטית
-      const docDate = parseDate(row.date)
-      if (paymentTerms && !dueDate && docDate) {
-        dueDate = calculateDueDate(docDate, paymentTerms)
-      }
+      const docDate = parseDate(getValue(row, 'תאריך', 'תאריך המסמך', 'date'))
+      let dueDate = getValue(row, 'due_date') ? parseDate(getValue(row, 'due_date')) : null
+      if (paymentTerms && !dueDate) dueDate = calculateDueDate(docDate, paymentTerms)
 
       return {
         company_id: companyId,
-        category_id: categoryId,
+        category_id: null,
         customer_id: customerId,
         amount: amountTotal || amountBeforeVat,
         amount_before_vat: amountBeforeVat,
-        vat_amount: vatAmountFromFile,
-        vat_exempt: vatAmountFromFile === 0,
+        vat_amount: vatAmount,
+        vat_exempt: vatAmount === 0,
         document_type: docType,
         document_status: documentStatus,
         date: docDate,
         due_date: dueDate,
         payment_terms: paymentTerms || null,
-        description: row.description || null,
-        invoice_number: row.invoice_number ? String(row.invoice_number) : null,
+        description: null,
+        invoice_number: getValue(row, 'מספר מסמך', 'מספר המסמך', 'invoice_number')?.toString() || null,
         payment_status: paymentStatus,
-        // שדות עזר לקישור (לא נשמרים ב-DB)
-        _customer_name: row.customer_name || null,
-        _linked_invoice_number: row.linked_invoice_number || null,
+        _customer_name: customerName, // לשימוש בקישור אוטומטי
       }
     })
 
-    // שלב 5: ייבוא הרשומות ב-batches
-    const cleanRecords = incomeRecords.map(r => {
-      const { _customer_name, _linked_invoice_number, ...record } = r
-      return record
-    })
-    
+    // שלב 4: ייבוא ב-batches
     const INCOME_BATCH_SIZE = 100
     let allInsertedRecords: Income[] = []
     
-    for (let i = 0; i < cleanRecords.length; i += INCOME_BATCH_SIZE) {
-      const batch = cleanRecords.slice(i, i + INCOME_BATCH_SIZE)
-      const { data: inserted, error } = await supabase
-        .from('income')
-        .insert(batch)
-        .select()
-      
+    for (let i = 0; i < incomeRecords.length; i += INCOME_BATCH_SIZE) {
+      const batch = incomeRecords.slice(i, i + INCOME_BATCH_SIZE).map(({ _customer_name, ...record }) => record)
+      const { data: inserted, error } = await supabase.from('income').insert(batch).select()
       if (error) throw error
-      if (inserted) {
-        allInsertedRecords = [...allInsertedRecords, ...inserted]
-      }
+      if (inserted) allInsertedRecords = [...allInsertedRecords, ...inserted]
     }
 
-    // שלב 6: קיזוז אוטומטי מהיר
+    // שלב 5: קישור אוטומטי
     let linkedCount = 0
     if (allInsertedRecords.length > 0) {
       linkedCount = await performSafeAutoLinking(incomeRecords, allInsertedRecords)
@@ -665,7 +409,6 @@ export default function IncomePage() {
 
     loadData()
     
-    // הודעת הצלחה עם פירוט
     const businessInvoiceCount = incomeRecords.filter(r => isBusinessInvoice(r.document_type)).length
     const taxDocCount = incomeRecords.filter(r => canCloseInvoice(r.document_type) || r.document_type === 'receipt').length
     
@@ -677,17 +420,10 @@ export default function IncomePage() {
     )
   }
 
-  // ========================================
-  // קיזוז אוטומטי זהיר - רק התאמות יחידות!
-  // ========================================
-  const performSafeAutoLinking = async (
-    originalRecords: any[], 
-    insertedRecords: Income[]
-  ): Promise<number> => {
-    // איסוף כל חשבונות העיסקה (חדשים + קיימים במערכת)
-    const allBusinessInvoices: { id: string; customerName: string; amount: number; date: string; invoiceNumber: string | null }[] = []
+  // קישור אוטומטי
+  const performSafeAutoLinking = async (originalRecords: any[], insertedRecords: Income[]): Promise<number> => {
+    const allBusinessInvoices: { id: string; customerName: string; amount: number; date: string }[] = []
     
-    // חשבונות עיסקה מהייבוא הנוכחי
     insertedRecords.forEach((record, index) => {
       if (isBusinessInvoice(record.document_type)) {
         allBusinessInvoices.push({
@@ -695,106 +431,65 @@ export default function IncomePage() {
           customerName: originalRecords[index]?._customer_name || '',
           amount: record.amount,
           date: record.date,
-          invoiceNumber: record.invoice_number,
         })
       }
     })
     
-    // חשבונות עיסקה קיימים במערכת (פתוחים)
-    const existingOpenInvoices = income.filter(
-      i => isBusinessInvoice(i.document_type) && i.document_status === 'open'
-    )
-    existingOpenInvoices.forEach(inv => {
+    income.filter(i => isBusinessInvoice(i.document_type) && i.document_status === 'open').forEach(inv => {
       allBusinessInvoices.push({
         id: inv.id,
         customerName: inv.customer?.name || '',
         amount: inv.amount,
         date: inv.date,
-        invoiceNumber: inv.invoice_number,
       })
     })
 
     const linksToCreate: { taxDocId: string; businessInvoiceId: string }[] = []
     const invoicesToClose: string[] = []
 
-    // מעבר על מסמכי המס/קבלות שיובאו
     for (let i = 0; i < insertedRecords.length; i++) {
       const insertedRecord = insertedRecords[i]
       const originalRecord = originalRecords[i]
 
-      // רק מסמכים שיכולים לסגור חשבון עיסקה
-      if (!canCloseInvoice(insertedRecord.document_type) && insertedRecord.document_type !== 'receipt') {
-        continue
-      }
+      if (!canCloseInvoice(insertedRecord.document_type) && insertedRecord.document_type !== 'receipt') continue
 
       const customerName = originalRecord?._customer_name || ''
       const amount = insertedRecord.amount
 
-      // חיפוש התאמות לפי לקוח + סכום
       const matches = allBusinessInvoices.filter(inv => 
         inv.customerName === customerName && 
         Math.abs(inv.amount - amount) < 1 &&
-        new Date(inv.date) <= new Date(insertedRecord.date) // חשבון עיסקה לפני מסמך הסגירה
+        new Date(inv.date) <= new Date(insertedRecord.date)
       )
 
-      // קישור רק אם יש התאמה יחידה!
-      if (matches.length === 1) {
-        const matchedInvoice = matches[0]
-        
-        // וידוא שהחשבון הזה לא כבר קושר
-        if (!invoicesToClose.includes(matchedInvoice.id)) {
-          linksToCreate.push({
-            taxDocId: insertedRecord.id,
-            businessInvoiceId: matchedInvoice.id
-          })
-          invoicesToClose.push(matchedInvoice.id)
-        }
+      if (matches.length === 1 && !invoicesToClose.includes(matches[0].id)) {
+        linksToCreate.push({ taxDocId: insertedRecord.id, businessInvoiceId: matches[0].id })
+        invoicesToClose.push(matches[0].id)
       }
-      // אם יש 0 או 2+ התאמות - לא מקשרים, משאירים לידני
     }
 
-    // ביצוע הקישורים במקביל (batches של 50)
+    // ביצוע במקביל
     const BATCH_SIZE = 50
     for (let i = 0; i < linksToCreate.length; i += BATCH_SIZE) {
       const batch = linksToCreate.slice(i, i + BATCH_SIZE)
       await Promise.all(batch.map(link => 
-        supabase
-          .from('income')
-          .update({ linked_document_id: link.businessInvoiceId })
-          .eq('id', link.taxDocId)
+        supabase.from('income').update({ linked_document_id: link.businessInvoiceId }).eq('id', link.taxDocId)
       ))
     }
 
-    // סגירת חשבונות העיסקה שקושרו (בקריאה אחת)
     if (invoicesToClose.length > 0) {
-      await supabase
-        .from('income')
-        .update({ document_status: 'closed' })
-        .in('id', invoicesToClose)
+      await supabase.from('income').update({ document_status: 'closed' }).in('id', invoicesToClose)
     }
 
-    console.log(`Safe auto-linked ${linksToCreate.length} documents (unique matches only)`)
     return linksToCreate.length
   }
 
   const resetForm = () => {
     setFormData({
-      category_id: '',
-      customer_id: '',
-      amount_before_vat: '',
-      vat_amount: '',
-      amount: '',
-      vat_exempt: false,
-      document_type: 'tax_invoice',
-      linked_document_id: '',
-      date: new Date().toISOString().split('T')[0],
-      due_date: '',
-      payment_terms: '',
-      description: '',
-      invoice_number: '',
-      payment_status: 'pending',
-      payment_date: '',
-      payment_method: '',
+      category_id: '', customer_id: '', amount_before_vat: '', vat_amount: '', amount: '',
+      vat_exempt: false, document_type: 'tax_invoice', linked_document_id: '',
+      date: new Date().toISOString().split('T')[0], due_date: '', payment_terms: '',
+      description: '', invoice_number: '', payment_status: 'pending', payment_date: '', payment_method: '',
     })
     setInputMode('before_vat')
   }
@@ -804,56 +499,38 @@ export default function IncomePage() {
       item.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.invoice_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.customer?.name?.toLowerCase().includes(searchTerm.toLowerCase())
-    
     const matchesStatus = !filterStatus || item.payment_status === filterStatus
     const matchesDocType = !filterDocType || item.document_type === filterDocType
     const matchesDocStatus = !filterDocStatus || item.document_status === filterDocStatus
     const matchesPaymentMethod = !filterPaymentMethod || (item as any).payment_method === filterPaymentMethod
     const matchesCategory = !filterCategory || item.category_id === filterCategory
     const matchesCustomer = !filterCustomer || item.customer_id === filterCustomer
-    
-    // סינון לפי חודש ושנה
     const itemDate = new Date(item.date)
     const matchesMonth = !filterMonth || (itemDate.getMonth() + 1) === parseInt(filterMonth)
     const matchesYear = !filterYear || itemDate.getFullYear() === parseInt(filterYear)
-    
-    return matchesSearch && matchesStatus && matchesDocType && matchesDocStatus && 
-           matchesPaymentMethod && matchesCategory && matchesCustomer && matchesMonth && matchesYear
+    return matchesSearch && matchesStatus && matchesDocType && matchesDocStatus && matchesPaymentMethod && matchesCategory && matchesCustomer && matchesMonth && matchesYear
   })
 
-  // שנים זמינות לסינון
   const availableYears = Array.from(new Set(income.map(i => new Date(i.date).getFullYear()))).sort((a, b) => b - a)
 
-  // פונקציות בחירה מרובה
   const toggleSelectItem = (id: string) => {
     setSelectedIds(prev => {
       const newSet = new Set(prev)
-      if (newSet.has(id)) {
-        newSet.delete(id)
-      } else {
-        newSet.add(id)
-      }
+      if (newSet.has(id)) newSet.delete(id)
+      else newSet.add(id)
       return newSet
     })
   }
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === filteredIncome.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(filteredIncome.map(i => i.id)))
-    }
+    if (selectedIds.size === filteredIncome.length) setSelectedIds(new Set())
+    else setSelectedIds(new Set(filteredIncome.map(i => i.id)))
   }
 
-  const clearSelection = () => {
-    setSelectedIds(new Set())
-  }
+  const clearSelection = () => setSelectedIds(new Set())
 
-  // עדכון המוני
   const handleBulkUpdate = async () => {
     if (selectedIds.size === 0) return
-
-    // בניית אובייקט העדכון רק עם שדות שנבחרו
     const updateData: Record<string, any> = {}
     if (bulkUpdateData.payment_method) updateData.payment_method = bulkUpdateData.payment_method
     if (bulkUpdateData.category_id) updateData.category_id = bulkUpdateData.category_id
@@ -866,13 +543,8 @@ export default function IncomePage() {
     }
 
     try {
-      const { error } = await supabase
-        .from('income')
-        .update(updateData)
-        .in('id', Array.from(selectedIds))
-
+      const { error } = await supabase.from('income').update(updateData).in('id', Array.from(selectedIds))
       if (error) throw error
-
       setSuccessMessage(`עודכנו ${selectedIds.size} הכנסות בהצלחה!`)
       setShowBulkUpdateModal(false)
       setBulkUpdateData({ payment_method: '', category_id: '', customer_id: '', payment_status: '' })
@@ -883,57 +555,23 @@ export default function IncomePage() {
     }
   }
 
-  const resetBulkUpdate = () => {
-    setBulkUpdateData({ payment_method: '', category_id: '', customer_id: '', payment_status: '' })
-  }
-
-  // איפוס כל הסינונים
   const clearFilters = () => {
-    setSearchTerm('')
-    setFilterStatus('')
-    setFilterDocType('')
-    setFilterDocStatus('')
-    setFilterPaymentMethod('')
-    setFilterCategory('')
-    setFilterCustomer('')
-    setFilterMonth('')
-    setFilterYear('')
+    setSearchTerm(''); setFilterStatus(''); setFilterDocType(''); setFilterDocStatus('')
+    setFilterPaymentMethod(''); setFilterCategory(''); setFilterCustomer(''); setFilterMonth(''); setFilterYear('')
   }
 
-  const hasActiveFilters = searchTerm || filterStatus || filterDocType || filterDocStatus || 
-                           filterPaymentMethod || filterCategory || filterCustomer || filterMonth || filterYear
+  const hasActiveFilters = searchTerm || filterStatus || filterDocType || filterDocStatus || filterPaymentMethod || filterCategory || filterCustomer || filterMonth || filterYear
 
-  // חשבוניות עסקה פתוחות
-  const openBusinessInvoices = income.filter(
-    i => i.document_type === 'invoice' && i.document_status === 'open'
-  )
-
-  // חשבוניות מס שיכולות לסגור חשבונית עסקה (ללא קישור)
-  const unlinkedTaxDocuments = income.filter(
-    i => canCloseInvoice(i.document_type) && !i.linked_document_id
-  )
+  const openBusinessInvoices = income.filter(i => i.document_type === 'invoice' && i.document_status === 'open')
+  const unlinkedTaxDocuments = income.filter(i => canCloseInvoice(i.document_type) && !i.linked_document_id)
 
   const totalAmount = filteredIncome.reduce((sum, item) => sum + Number(item.amount), 0)
-  const totalVat = filteredIncome
-    .filter(i => isVatDocument(i.document_type))
-    .reduce((sum, item) => sum + Number(item.vat_amount || 0), 0)
-
-  // חישוב הכנסות ממתינות לתשלום (פתוחות)
-  const pendingPayments = income.filter(i => 
-    i.payment_status !== 'paid' && i.document_status === 'open'
-  )
+  const totalVat = filteredIncome.filter(i => isVatDocument(i.document_type)).reduce((sum, item) => sum + Number(item.vat_amount || 0), 0)
+  const pendingPayments = income.filter(i => i.payment_status !== 'paid' && i.document_status === 'open')
   const totalPending = pendingPayments.reduce((sum, item) => sum + Number(item.amount), 0)
-
-  // חישוב הכנסות באיחור
   const overduePayments = income.filter(i => isOverdue((i as any).due_date, i.payment_status))
   const totalOverdue = overduePayments.reduce((sum, item) => sum + Number(item.amount), 0)
-
-  // חישוב הכנסות עתידיות (עם תאריך לתשלום בעתיד)
-  const futurePayments = income.filter(i => 
-    (i as any).due_date && 
-    new Date((i as any).due_date) > new Date() && 
-    i.payment_status !== 'paid'
-  )
+  const futurePayments = income.filter(i => (i as any).due_date && new Date((i as any).due_date) > new Date() && i.payment_status !== 'paid')
   const totalFuture = futurePayments.reduce((sum, item) => sum + Number(item.amount), 0)
 
   if (loading) {
@@ -944,28 +582,17 @@ export default function IncomePage() {
     )
   }
 
-  // שדות ייבוא - תמיכה בפורמט CRM ובפורמט סטנדרטי
+  // שדות ייבוא - פשוט וברור (בלי תיאור!)
   const importRequiredFields = [
-    // פורמט CRM
-    { key: 'מספר המסמך', label: 'מספר המסמך', required: false },
+    { key: 'תאריך', label: 'תאריך', required: false },
     { key: 'סוג מסמך', label: 'סוג מסמך', required: false },
-    { key: 'שם הלקוח', label: 'שם הלקוח', required: false },
+    { key: 'מספר מסמך', label: 'מספר מסמך', required: false },
     { key: 'שם לקוח', label: 'שם לקוח', required: false },
-    { key: 'תאריך המסמך', label: 'תאריך המסמך', required: false },
+    { key: 'סכום כולל מע״מ', label: 'סכום כולל מע״מ', required: false },
+    { key: 'סכום לפני מע״מ', label: 'סכום לפני מע״מ', required: false },
+    { key: 'מע״מ', label: 'מע״מ', required: false },
+    { key: 'תנאי תשלום', label: 'תנאי תשלום', required: false },
     { key: 'סטטוס', label: 'סטטוס', required: false },
-    { key: 'חשבונית ללא מע"מ (אילת וחו"ל)', label: 'סכום לפני מע״מ', required: false },
-    { key: 'מוכר מע"מ', label: 'מע״מ', required: false },
-    { key: 'חשבונית רגילה', label: 'סכום כולל', required: false },
-    // פורמט סטנדרטי (fallback)
-    { key: 'invoice_number', label: 'מספר מסמך', required: false },
-    { key: 'document_type', label: 'סוג מסמך', required: false },
-    { key: 'customer_name', label: 'לקוח', required: false },
-    { key: 'date', label: 'תאריך', required: false },
-    { key: 'amount_before_vat', label: 'סכום (לפני מע״מ)', required: false },
-    { key: 'amount', label: 'סכום', required: false },
-    { key: 'payment_terms', label: 'תנאי תשלום', required: false },
-    { key: 'due_date', label: 'תאריך לתשלום', required: false },
-    { key: 'description', label: 'תיאור', required: false },
   ]
 
   return (
@@ -987,176 +614,66 @@ export default function IncomePage() {
         }
       />
 
-      {/* Alert for open business invoices */}
       {openBusinessInvoices.length > 0 && (
         <Alert variant="warning">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5" />
-            <span>
-              יש {openBusinessInvoices.length} חשבוניות עסקה פתוחות שטרם הומרו לחשבונית מס
-            </span>
+            <span>יש {openBusinessInvoices.length} חשבוניות עסקה פתוחות שטרם הומרו לחשבונית מס</span>
           </div>
         </Alert>
       )}
 
-      {error && (
-        <Alert variant="danger" onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
+      {error && <Alert variant="danger" onClose={() => setError(null)}>{error}</Alert>}
+      {successMessage && <Alert variant="success" onClose={() => setSuccessMessage(null)}>{successMessage}</Alert>}
 
-      {successMessage && (
-        <Alert variant="success" onClose={() => setSuccessMessage(null)}>
-          {successMessage}
-        </Alert>
-      )}
-
-      {/* Bulk Actions Bar */}
       {selectedIds.size > 0 && (
         <Card padding="md" className="bg-primary-50 border-primary-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <CheckSquare className="w-5 h-5 text-primary-600" />
-              <span className="font-medium text-primary-900">
-                נבחרו {selectedIds.size} הכנסות
-              </span>
+              <span className="font-medium text-primary-900">נבחרו {selectedIds.size} הכנסות</span>
             </div>
             <div className="flex items-center gap-2">
-              <Button size="sm" onClick={() => setShowBulkUpdateModal(true)}>
-                עדכון שדות
-              </Button>
-              <Button size="sm" variant="outline" onClick={clearSelection}>
-                ביטול בחירה
-              </Button>
+              <Button size="sm" onClick={() => setShowBulkUpdateModal(true)}>עדכון שדות</Button>
+              <Button size="sm" variant="outline" onClick={clearSelection}>ביטול בחירה</Button>
             </div>
           </div>
         </Card>
       )}
 
-      {/* Filters */}
       <Card padding="md">
         <div className="space-y-4">
-          {/* שורה ראשית - חיפוש + כפתור סינון */}
           <div className="flex flex-wrap gap-4 items-center">
             <div className="flex-1 min-w-[200px]">
               <div className="relative">
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  placeholder="חיפוש לפי תיאור, מספר מסמך או לקוח..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pr-10"
-                />
+                <Input placeholder="חיפוש לפי מספר מסמך או לקוח..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pr-10" />
               </div>
             </div>
-            <Button 
-              variant={showAdvancedFilters ? 'primary' : 'outline'} 
-              size="sm"
-              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            >
+            <Button variant={showAdvancedFilters ? 'primary' : 'outline'} size="sm" onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}>
               <Filter className="w-4 h-4" />
               סינון {hasActiveFilters && `(${[filterStatus, filterDocType, filterDocStatus, filterPaymentMethod, filterCategory, filterCustomer, filterMonth, filterYear].filter(Boolean).length})`}
             </Button>
             {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
-                <X className="w-4 h-4" />
-                נקה
-              </Button>
+              <Button variant="ghost" size="sm" onClick={clearFilters}><X className="w-4 h-4" />נקה</Button>
             )}
           </div>
 
-          {/* סינונים מתקדמים - מוסתרים כברירת מחדל */}
           {showAdvancedFilters && (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 pt-3 border-t">
-              <Select
-                options={[
-                  { value: '', label: 'סוג מסמך' },
-                  ...incomeDocumentTypes
-                ]}
-                value={filterDocType}
-                onChange={(e) => setFilterDocType(e.target.value)}
-              />
-              <Select
-                options={[
-                  { value: '', label: 'סטטוס מסמך' },
-                  { value: 'open', label: 'פתוח' },
-                  { value: 'closed', label: 'סגור' },
-                  { value: 'cancelled', label: 'מבוטל' },
-                ]}
-                value={filterDocStatus}
-                onChange={(e) => setFilterDocStatus(e.target.value)}
-              />
-              <Select
-                options={[
-                  { value: '', label: 'סטטוס תשלום' },
-                  { value: 'pending', label: 'ממתין' },
-                  { value: 'partial', label: 'שולם חלקית' },
-                  { value: 'paid', label: 'שולם' },
-                ]}
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-              />
-              <Select
-                options={[
-                  { value: '', label: 'אמצעי תשלום' },
-                  { value: 'bank_transfer', label: 'העברה בנקאית' },
-                  { value: 'credit_card', label: 'כרטיס אשראי' },
-                  { value: 'cash', label: 'מזומן' },
-                  { value: 'check', label: 'צ׳ק' },
-                  { value: 'bit', label: 'ביט / פייבוקס' },
-                ]}
-                value={filterPaymentMethod}
-                onChange={(e) => setFilterPaymentMethod(e.target.value)}
-              />
-              <Select
-                options={[
-                  { value: '', label: 'קטגוריה' },
-                  ...categories.map(c => ({ value: c.id, label: c.name }))
-                ]}
-                value={filterCategory}
-                onChange={(e) => setFilterCategory(e.target.value)}
-              />
-              <Select
-                options={[
-                  { value: '', label: 'לקוח' },
-                  ...customers.map(c => ({ value: c.id, label: c.name }))
-                ]}
-                value={filterCustomer}
-                onChange={(e) => setFilterCustomer(e.target.value)}
-              />
-              <Select
-                options={[
-                  { value: '', label: 'חודש' },
-                  { value: '1', label: 'ינואר' },
-                  { value: '2', label: 'פברואר' },
-                  { value: '3', label: 'מרץ' },
-                  { value: '4', label: 'אפריל' },
-                  { value: '5', label: 'מאי' },
-                  { value: '6', label: 'יוני' },
-                  { value: '7', label: 'יולי' },
-                  { value: '8', label: 'אוגוסט' },
-                  { value: '9', label: 'ספטמבר' },
-                  { value: '10', label: 'אוקטובר' },
-                  { value: '11', label: 'נובמבר' },
-                  { value: '12', label: 'דצמבר' },
-                ]}
-                value={filterMonth}
-                onChange={(e) => setFilterMonth(e.target.value)}
-              />
-              <Select
-                options={[
-                  { value: '', label: 'שנה' },
-                  ...availableYears.map(y => ({ value: y.toString(), label: y.toString() }))
-                ]}
-                value={filterYear}
-                onChange={(e) => setFilterYear(e.target.value)}
-              />
+              <Select options={[{ value: '', label: 'סוג מסמך' }, ...incomeDocumentTypes]} value={filterDocType} onChange={(e) => setFilterDocType(e.target.value)} />
+              <Select options={[{ value: '', label: 'סטטוס מסמך' }, { value: 'open', label: 'פתוח' }, { value: 'closed', label: 'סגור' }, { value: 'cancelled', label: 'מבוטל' }]} value={filterDocStatus} onChange={(e) => setFilterDocStatus(e.target.value)} />
+              <Select options={[{ value: '', label: 'סטטוס תשלום' }, { value: 'pending', label: 'ממתין' }, { value: 'partial', label: 'שולם חלקית' }, { value: 'paid', label: 'שולם' }]} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} />
+              <Select options={[{ value: '', label: 'אמצעי תשלום' }, { value: 'bank_transfer', label: 'העברה בנקאית' }, { value: 'credit_card', label: 'כרטיס אשראי' }, { value: 'cash', label: 'מזומן' }, { value: 'check', label: 'צ׳ק' }, { value: 'bit', label: 'ביט / פייבוקס' }]} value={filterPaymentMethod} onChange={(e) => setFilterPaymentMethod(e.target.value)} />
+              <Select options={[{ value: '', label: 'קטגוריה' }, ...categories.map(c => ({ value: c.id, label: c.name }))]} value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} />
+              <Select options={[{ value: '', label: 'לקוח' }, ...customers.map(c => ({ value: c.id, label: c.name }))]} value={filterCustomer} onChange={(e) => setFilterCustomer(e.target.value)} />
+              <Select options={[{ value: '', label: 'חודש' }, { value: '1', label: 'ינואר' }, { value: '2', label: 'פברואר' }, { value: '3', label: 'מרץ' }, { value: '4', label: 'אפריל' }, { value: '5', label: 'מאי' }, { value: '6', label: 'יוני' }, { value: '7', label: 'יולי' }, { value: '8', label: 'אוגוסט' }, { value: '9', label: 'ספטמבר' }, { value: '10', label: 'אוקטובר' }, { value: '11', label: 'נובמבר' }, { value: '12', label: 'דצמבר' }]} value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)} />
+              <Select options={[{ value: '', label: 'שנה' }, ...availableYears.map(y => ({ value: y.toString(), label: y.toString() }))]} value={filterYear} onChange={(e) => setFilterYear(e.target.value)} />
             </div>
           )}
         </div>
       </Card>
 
-      {/* Summary */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-success-50 border border-success-200 rounded-lg p-4">
           <p className="text-sm text-success-600">סה״כ (מסוננים)</p>
@@ -1179,37 +696,25 @@ export default function IncomePage() {
         </div>
         {totalOverdue > 0 && (
           <div className="bg-danger-50 border border-danger-200 rounded-lg p-4">
-            <p className="text-sm text-danger-600 flex items-center gap-1">
-              <Clock className="w-4 h-4" />
-              באיחור!
-            </p>
+            <p className="text-sm text-danger-600 flex items-center gap-1"><Clock className="w-4 h-4" />באיחור!</p>
             <p className="text-xl font-bold text-danger-700">{formatCurrency(totalOverdue)}</p>
             <p className="text-xs text-danger-600">{overduePayments.length} מסמכים</p>
           </div>
         )}
       </div>
 
-      {/* Table */}
       <Card padding="none">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead className="w-10">
-                <button
-                  onClick={toggleSelectAll}
-                  className="p-1 hover:bg-gray-100 rounded"
-                >
-                  {selectedIds.size === filteredIncome.length && filteredIncome.length > 0 ? (
-                    <CheckSquare className="w-5 h-5 text-primary-600" />
-                  ) : (
-                    <Square className="w-5 h-5 text-gray-400" />
-                  )}
+                <button onClick={toggleSelectAll} className="p-1 hover:bg-gray-100 rounded">
+                  {selectedIds.size === filteredIncome.length && filteredIncome.length > 0 ? <CheckSquare className="w-5 h-5 text-primary-600" /> : <Square className="w-5 h-5 text-gray-400" />}
                 </button>
               </TableHead>
               <TableHead>תאריך</TableHead>
               <TableHead>סוג מסמך</TableHead>
               <TableHead>מס׳</TableHead>
-              <TableHead>תיאור</TableHead>
               <TableHead>לקוח</TableHead>
               <TableHead>סכום</TableHead>
               <TableHead>לתשלום</TableHead>
@@ -1221,26 +726,14 @@ export default function IncomePage() {
           <TableBody>
             {filteredIncome.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="text-center py-8 text-gray-500">
-                  אין מסמכים להצגה
-                </TableCell>
+                <TableCell colSpan={10} className="text-center py-8 text-gray-500">אין מסמכים להצגה</TableCell>
               </TableRow>
             ) : (
               filteredIncome.map((item) => (
-                <TableRow 
-                  key={item.id} 
-                  className={`${item.document_status === 'cancelled' ? 'opacity-50' : ''} ${selectedIds.has(item.id) ? 'bg-primary-50' : ''}`}
-                >
+                <TableRow key={item.id} className={`${item.document_status === 'cancelled' ? 'opacity-50' : ''} ${selectedIds.has(item.id) ? 'bg-primary-50' : ''}`}>
                   <TableCell>
-                    <button
-                      onClick={() => toggleSelectItem(item.id)}
-                      className="p-1 hover:bg-gray-100 rounded"
-                    >
-                      {selectedIds.has(item.id) ? (
-                        <CheckSquare className="w-5 h-5 text-primary-600" />
-                      ) : (
-                        <Square className="w-5 h-5 text-gray-400" />
-                      )}
+                    <button onClick={() => toggleSelectItem(item.id)} className="p-1 hover:bg-gray-100 rounded">
+                      {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary-600" /> : <Square className="w-5 h-5 text-gray-400" />}
                     </button>
                   </TableCell>
                   <TableCell>{formatDateShort(item.date)}</TableCell>
@@ -1253,77 +746,39 @@ export default function IncomePage() {
                   <TableCell className="font-mono text-sm">{item.invoice_number || '-'}</TableCell>
                   <TableCell>
                     <div>
-                      <p className="font-medium">{item.description || '-'}</p>
+                      <p className="font-medium">{item.customer?.name || '-'}</p>
                       {item.linked_document_id && (
-                        <p className="text-xs text-primary-600 flex items-center gap-1">
-                          <Link2 className="w-3 h-3" />
-                          מקושר לחשבונית עסקה
-                        </p>
+                        <p className="text-xs text-primary-600 flex items-center gap-1"><Link2 className="w-3 h-3" />מקושר לחשבונית עסקה</p>
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>{item.customer?.name || '-'}</TableCell>
-                  <TableCell className="font-semibold">
-                    {formatCurrency(item.amount)}
-                  </TableCell>
+                  <TableCell className="font-semibold">{formatCurrency(item.amount)}</TableCell>
                   <TableCell>
                     {(item as any).due_date ? (
                       <div className={`flex items-center gap-1 ${isOverdue((item as any).due_date, item.payment_status) ? 'text-danger-600' : ''}`}>
-                        {isOverdue((item as any).due_date, item.payment_status) && (
-                          <Clock className="w-4 h-4" />
-                        )}
+                        {isOverdue((item as any).due_date, item.payment_status) && <Clock className="w-4 h-4" />}
                         <span className="text-sm">{formatDateShort((item as any).due_date)}</span>
                       </div>
-                    ) : (
-                      <span className="text-gray-400 text-sm">-</span>
-                    )}
+                    ) : <span className="text-gray-400 text-sm">-</span>}
                   </TableCell>
                   <TableCell>
                     {(item as any).payment_method ? (
-                      <Badge variant="default">
-                        {paymentMethods.find(p => p.value === (item as any).payment_method)?.label || (item as any).payment_method}
-                      </Badge>
-                    ) : (
-                      <span className="text-gray-400 text-sm">לא הוגדר</span>
-                    )}
+                      <Badge variant="default">{paymentMethods.find(p => p.value === (item as any).payment_method)?.label || (item as any).payment_method}</Badge>
+                    ) : <span className="text-gray-400 text-sm">לא הוגדר</span>}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1">
-                      <Badge variant={documentStatusColors[item.document_status] as any} size="sm">
-                        {documentStatusLabels[item.document_status]}
-                      </Badge>
-                      <Badge variant={getStatusColor(item.payment_status) as any} size="sm">
-                        {translateStatus(item.payment_status)}
-                      </Badge>
+                      <Badge variant={documentStatusColors[item.document_status] as any} size="sm">{documentStatusLabels[item.document_status]}</Badge>
+                      <Badge variant={getStatusColor(item.payment_status) as any} size="sm">{translateStatus(item.payment_status)}</Badge>
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      {/* Link button for open business invoices */}
                       {isBusinessInvoice(item.document_type) && item.document_status === 'open' && (
-                        <button
-                          onClick={() => {
-                            setLinkingDocument(item)
-                            setShowLinkModal(true)
-                          }}
-                          className="p-1 text-primary-500 hover:text-primary-700"
-                          title="קשר לחשבונית מס"
-                        >
-                          <Link2 className="w-4 h-4" />
-                        </button>
+                        <button onClick={() => { setLinkingDocument(item); setShowLinkModal(true) }} className="p-1 text-primary-500 hover:text-primary-700" title="קשר לחשבונית מס"><Link2 className="w-4 h-4" /></button>
                       )}
-                      <button
-                        onClick={() => handleEdit(item)}
-                        className="p-1 text-gray-400 hover:text-primary-600"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(item.id)}
-                        className="p-1 text-gray-400 hover:text-danger-600"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <button onClick={() => handleEdit(item)} className="p-1 text-gray-400 hover:text-primary-600"><Pencil className="w-4 h-4" /></button>
+                      <button onClick={() => handleDelete(item.id)} className="p-1 text-gray-400 hover:text-danger-600"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -1333,264 +788,85 @@ export default function IncomePage() {
         </Table>
       </Card>
 
-      {/* Add/Edit Modal */}
-      <Modal
-        isOpen={showAddModal}
-        onClose={() => {
-          setShowAddModal(false)
-          setEditingIncome(null)
-          resetForm()
-        }}
-        title={editingIncome ? 'עריכת מסמך' : 'הוספת מסמך'}
-        size="lg"
-      >
+      <Modal isOpen={showAddModal} onClose={() => { setShowAddModal(false); setEditingIncome(null); resetForm() }} title={editingIncome ? 'עריכת מסמך' : 'הוספת מסמך'} size="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Document Type */}
-          <Select
-            label="סוג מסמך"
-            options={incomeDocumentTypes}
-            value={formData.document_type}
-            onChange={(e) => setFormData({ ...formData, document_type: e.target.value as IncomeDocumentType })}
-            required
-          />
+          <Select label="סוג מסמך" options={incomeDocumentTypes} value={formData.document_type} onChange={(e) => setFormData({ ...formData, document_type: e.target.value as IncomeDocumentType })} required />
 
-          {/* Link to business invoice - only for tax documents */}
           {canCloseInvoice(formData.document_type) && openBusinessInvoices.length > 0 && !editingIncome && (
-            <Select
-              label="קישור לחשבונית עסקה (אופציונלי)"
-              options={[
-                { value: '', label: 'ללא קישור' },
-                ...openBusinessInvoices.map(inv => ({
-                  value: inv.id,
-                  label: `${inv.invoice_number || 'ללא מספר'} - ${inv.description || ''} - ${formatCurrency(inv.amount)}`
-                }))
-              ]}
-              value={formData.linked_document_id}
-              onChange={(e) => setFormData({ ...formData, linked_document_id: e.target.value })}
-            />
+            <Select label="קישור לחשבונית עסקה (אופציונלי)" options={[{ value: '', label: 'ללא קישור' }, ...openBusinessInvoices.map(inv => ({ value: inv.id, label: `${inv.invoice_number || 'ללא מספר'} - ${formatCurrency(inv.amount)}` }))]} value={formData.linked_document_id} onChange={(e) => setFormData({ ...formData, linked_document_id: e.target.value })} />
           )}
 
-          {/* Info about document type */}
           {isBusinessInvoice(formData.document_type) && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
               💡 חשבונית עסקה לא נכללת בדוח המע״מ. יש להמיר אותה לחשבונית מס בעת קבלת התשלום.
             </div>
           )}
 
-          {/* VAT Input Mode Toggle - Only for VAT documents */}
           {isVatDocument(formData.document_type) && (
             <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
               <span className="text-sm font-medium text-gray-700">הזנת סכום:</span>
               <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setInputMode('before_vat')}
-                  className={`px-3 py-1 rounded text-sm ${
-                    inputMode === 'before_vat'
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-white border text-gray-700'
-                  }`}
-                >
-                  לפני מע״מ
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInputMode('total')}
-                  className={`px-3 py-1 rounded text-sm ${
-                    inputMode === 'total'
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-white border text-gray-700'
-                  }`}
-                >
-                  כולל מע״מ
-                </button>
+                <button type="button" onClick={() => setInputMode('before_vat')} className={`px-3 py-1 rounded text-sm ${inputMode === 'before_vat' ? 'bg-primary-600 text-white' : 'bg-white border text-gray-700'}`}>לפני מע״מ</button>
+                <button type="button" onClick={() => setInputMode('total')} className={`px-3 py-1 rounded text-sm ${inputMode === 'total' ? 'bg-primary-600 text-white' : 'bg-white border text-gray-700'}`}>כולל מע״מ</button>
               </div>
             </div>
           )}
 
-          {/* VAT Exempt Toggle - Only for VAT documents */}
           {isVatDocument(formData.document_type) && (
             <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.vat_exempt}
-                onChange={(e) => setFormData({ ...formData, vat_exempt: e.target.checked })}
-                className="w-4 h-4 text-primary-600 rounded"
-              />
+              <input type="checkbox" checked={formData.vat_exempt} onChange={(e) => setFormData({ ...formData, vat_exempt: e.target.checked })} className="w-4 h-4 text-primary-600 rounded" />
               <span className="text-sm font-medium">פטור ממע״מ</span>
             </label>
           )}
 
-          {/* Amount Fields */}
           {isVatDocument(formData.document_type) && !formData.vat_exempt ? (
             <div className="grid grid-cols-3 gap-4">
-              <Input
-                label={inputMode === 'before_vat' ? 'סכום לפני מע״מ *' : 'סכום לפני מע״מ'}
-                type="number"
-                step="0.01"
-                value={formData.amount_before_vat}
-                onChange={(e) => {
-                  setInputMode('before_vat')
-                  setFormData({ ...formData, amount_before_vat: e.target.value })
-                }}
-                required={inputMode === 'before_vat'}
-              />
-              <Input
-                label="מע״מ (18%)"
-                type="number"
-                step="0.01"
-                value={formData.vat_amount}
-                disabled
-                className="bg-gray-50"
-              />
-              <Input
-                label={inputMode === 'total' ? 'סכום כולל מע״מ *' : 'סכום כולל מע״מ'}
-                type="number"
-                step="0.01"
-                value={formData.amount}
-                onChange={(e) => {
-                  setInputMode('total')
-                  setFormData({ ...formData, amount: e.target.value })
-                }}
-                required={inputMode === 'total'}
-              />
+              <Input label={inputMode === 'before_vat' ? 'סכום לפני מע״מ *' : 'סכום לפני מע״מ'} type="number" step="0.01" value={formData.amount_before_vat} onChange={(e) => { setInputMode('before_vat'); setFormData({ ...formData, amount_before_vat: e.target.value }) }} required={inputMode === 'before_vat'} />
+              <Input label="מע״מ (18%)" type="number" step="0.01" value={formData.vat_amount} disabled className="bg-gray-50" />
+              <Input label={inputMode === 'total' ? 'סכום כולל מע״מ *' : 'סכום כולל מע״מ'} type="number" step="0.01" value={formData.amount} onChange={(e) => { setInputMode('total'); setFormData({ ...formData, amount: e.target.value }) }} required={inputMode === 'total'} />
             </div>
           ) : (
-            <Input
-              label="סכום"
-              type="number"
-              step="0.01"
-              value={formData.amount_before_vat}
-              onChange={(e) => setFormData({ ...formData, amount_before_vat: e.target.value, amount: e.target.value })}
-              required
-            />
+            <Input label="סכום" type="number" step="0.01" value={formData.amount_before_vat} onChange={(e) => setFormData({ ...formData, amount_before_vat: e.target.value, amount: e.target.value })} required />
           )}
 
-          <Input
-            label="תאריך"
-            type="date"
-            value={formData.date}
-            onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-            required
-          />
+          <Input label="תאריך" type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} required />
 
-          {/* תנאי תשלום ותאריך לתשלום */}
           <div className="grid grid-cols-2 gap-4">
-            <Select
-              label="תנאי תשלום"
-              options={paymentTermsOptions}
-              value={formData.payment_terms}
-              onChange={(e) => setFormData({ ...formData, payment_terms: e.target.value })}
-            />
-            <Input
-              label="תאריך לתשלום"
-              type="date"
-              value={formData.due_date}
-              onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-              disabled={formData.payment_terms !== '' && formData.payment_terms !== 'custom'}
-            />
+            <Select label="תנאי תשלום" options={paymentTermsOptions} value={formData.payment_terms} onChange={(e) => setFormData({ ...formData, payment_terms: e.target.value })} />
+            <Input label="תאריך לתשלום" type="date" value={formData.due_date} onChange={(e) => setFormData({ ...formData, due_date: e.target.value })} disabled={formData.payment_terms !== '' && formData.payment_terms !== 'custom'} />
           </div>
 
-          <Input
-            label="תיאור"
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            placeholder="תיאור ההכנסה"
-          />
-
           <div className="grid grid-cols-2 gap-4">
-            <Select
-              label="קטגוריה"
-              options={[
-                { value: '', label: 'בחר קטגוריה' },
-                ...categories.map(c => ({ value: c.id, label: c.name }))
-              ]}
-              value={formData.category_id}
-              onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-            />
-            <Select
-              label="לקוח"
-              options={[
-                { value: '', label: 'בחר לקוח' },
-                ...customers.map(c => ({ value: c.id, label: c.name }))
-              ]}
-              value={formData.customer_id}
-              onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })}
-            />
+            <Select label="קטגוריה" options={[{ value: '', label: 'בחר קטגוריה' }, ...categories.map(c => ({ value: c.id, label: c.name }))]} value={formData.category_id} onChange={(e) => setFormData({ ...formData, category_id: e.target.value })} />
+            <Select label="לקוח" options={[{ value: '', label: 'בחר לקוח' }, ...customers.map(c => ({ value: c.id, label: c.name }))]} value={formData.customer_id} onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })} />
           </div>
 
-          <Input
-            label="מספר מסמך"
-            value={formData.invoice_number}
-            onChange={(e) => setFormData({ ...formData, invoice_number: e.target.value })}
-            placeholder="מספר חשבונית / קבלה"
-          />
+          <Input label="מספר מסמך" value={formData.invoice_number} onChange={(e) => setFormData({ ...formData, invoice_number: e.target.value })} placeholder="מספר חשבונית / קבלה" />
 
           <div className="grid grid-cols-2 gap-4">
-            <Select
-              label="סטטוס תשלום"
-              options={[
-                { value: 'pending', label: 'ממתין' },
-                { value: 'partial', label: 'שולם חלקית' },
-                { value: 'paid', label: 'שולם' },
-              ]}
-              value={formData.payment_status}
-              onChange={(e) => setFormData({ ...formData, payment_status: e.target.value as any })}
-            />
-            <Select
-              label="אמצעי תשלום"
-              options={paymentMethods}
-              value={formData.payment_method}
-              onChange={(e) => setFormData({ ...formData, payment_method: e.target.value as PaymentMethod })}
-            />
+            <Select label="סטטוס תשלום" options={[{ value: 'pending', label: 'ממתין' }, { value: 'partial', label: 'שולם חלקית' }, { value: 'paid', label: 'שולם' }]} value={formData.payment_status} onChange={(e) => setFormData({ ...formData, payment_status: e.target.value as any })} />
+            <Select label="אמצעי תשלום" options={paymentMethods} value={formData.payment_method} onChange={(e) => setFormData({ ...formData, payment_method: e.target.value as PaymentMethod })} />
           </div>
 
           {formData.payment_status === 'paid' && (
-            <Input
-              label="תאריך תשלום"
-              type="date"
-              value={formData.payment_date}
-              onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
-            />
+            <Input label="תאריך תשלום" type="date" value={formData.payment_date} onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })} />
           )}
 
           <div className="flex gap-3 pt-4">
-            <Button type="submit">
-              {editingIncome ? 'עדכון' : 'הוספה'}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setShowAddModal(false)
-                setEditingIncome(null)
-                resetForm()
-              }}
-            >
-              ביטול
-            </Button>
+            <Button type="submit">{editingIncome ? 'עדכון' : 'הוספה'}</Button>
+            <Button type="button" variant="outline" onClick={() => { setShowAddModal(false); setEditingIncome(null); resetForm() }}>ביטול</Button>
           </div>
         </form>
       </Modal>
 
-      {/* Link Document Modal */}
-      <Modal
-        isOpen={showLinkModal}
-        onClose={() => {
-          setShowLinkModal(false)
-          setLinkingDocument(null)
-        }}
-        title="קישור חשבונית עסקה לחשבונית מס"
-      >
+      <Modal isOpen={showLinkModal} onClose={() => { setShowLinkModal(false); setLinkingDocument(null) }} title="קישור חשבונית עסקה לחשבונית מס">
         {linkingDocument && (
           <div className="space-y-4">
             <div className="bg-gray-50 rounded-lg p-4">
               <h4 className="font-medium mb-2">חשבונית עסקה:</h4>
               <p>מספר: {linkingDocument.invoice_number || 'ללא'}</p>
-              <p>תיאור: {linkingDocument.description || '-'}</p>
               <p>סכום: {formatCurrency(linkingDocument.amount)}</p>
             </div>
-
             <div>
               <h4 className="font-medium mb-2">בחר חשבונית מס לקישור:</h4>
               {unlinkedTaxDocuments.length === 0 ? (
@@ -1598,11 +874,7 @@ export default function IncomePage() {
               ) : (
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {unlinkedTaxDocuments.map(doc => (
-                    <button
-                      key={doc.id}
-                      onClick={() => handleLinkDocument(linkingDocument.id, doc.id)}
-                      className="w-full text-right p-3 border rounded-lg hover:bg-primary-50 hover:border-primary-300 transition-colors"
-                    >
+                    <button key={doc.id} onClick={() => handleLinkDocument(linkingDocument.id, doc.id)} className="w-full text-right p-3 border rounded-lg hover:bg-primary-50 hover:border-primary-300 transition-colors">
                       <div className="flex justify-between items-center">
                         <span className="font-medium">{getDocumentTypeLabel(doc.document_type)}</span>
                         <span className="text-success-600 font-bold">{formatCurrency(doc.amount)}</span>
@@ -1610,113 +882,33 @@ export default function IncomePage() {
                       <div className="text-sm text-gray-500">
                         {doc.invoice_number && <span>מס׳ {doc.invoice_number} | </span>}
                         {formatDateShort(doc.date)}
-                        {doc.description && <span> | {doc.description}</span>}
                       </div>
                     </button>
                   ))}
                 </div>
               )}
             </div>
-
             <div className="flex justify-end pt-4">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowLinkModal(false)
-                  setLinkingDocument(null)
-                }}
-              >
-                ביטול
-              </Button>
+              <Button variant="outline" onClick={() => { setShowLinkModal(false); setLinkingDocument(null) }}>ביטול</Button>
             </div>
           </div>
         )}
       </Modal>
 
-      {/* Import Modal - עודכן עם שדות חדשים */}
-      <Modal
-        isOpen={showImportModal}
-        onClose={() => setShowImportModal(false)}
-        size="xl"
-      >
-        <ExcelImport
-          type="income"
-          requiredFields={importRequiredFields}
-          onImport={handleImport}
-          onClose={() => setShowImportModal(false)}
-        />
+      <Modal isOpen={showImportModal} onClose={() => setShowImportModal(false)} size="xl">
+        <ExcelImport type="income" requiredFields={importRequiredFields} onImport={handleImport} onClose={() => setShowImportModal(false)} />
       </Modal>
 
-      {/* Bulk Update Modal */}
-      <Modal
-        isOpen={showBulkUpdateModal}
-        onClose={() => {
-          setShowBulkUpdateModal(false)
-          resetBulkUpdate()
-        }}
-        title={`עדכון ${selectedIds.size} הכנסות`}
-      >
+      <Modal isOpen={showBulkUpdateModal} onClose={() => { setShowBulkUpdateModal(false); setBulkUpdateData({ payment_method: '', category_id: '', customer_id: '', payment_status: '' }) }} title={`עדכון ${selectedIds.size} הכנסות`}>
         <div className="space-y-4">
-          <p className="text-gray-600 text-sm">
-            בחרי את השדות לעדכון. רק שדות עם ערך נבחר יעודכנו:
-          </p>
-          
-          <Select
-            label="אמצעי תשלום"
-            options={[
-              { value: '', label: '-- ללא שינוי --' },
-              ...paymentMethods.filter(p => p.value !== '')
-            ]}
-            value={bulkUpdateData.payment_method}
-            onChange={(e) => setBulkUpdateData(prev => ({ ...prev, payment_method: e.target.value }))}
-          />
-          
-          <Select
-            label="קטגוריה"
-            options={[
-              { value: '', label: '-- ללא שינוי --' },
-              ...categories.map(c => ({ value: c.id, label: c.name }))
-            ]}
-            value={bulkUpdateData.category_id}
-            onChange={(e) => setBulkUpdateData(prev => ({ ...prev, category_id: e.target.value }))}
-          />
-          
-          <Select
-            label="לקוח"
-            options={[
-              { value: '', label: '-- ללא שינוי --' },
-              ...customers.map(c => ({ value: c.id, label: c.name }))
-            ]}
-            value={bulkUpdateData.customer_id}
-            onChange={(e) => setBulkUpdateData(prev => ({ ...prev, customer_id: e.target.value }))}
-          />
-          
-          <Select
-            label="סטטוס תשלום"
-            options={[
-              { value: '', label: '-- ללא שינוי --' },
-              { value: 'pending', label: 'ממתין' },
-              { value: 'partial', label: 'שולם חלקית' },
-              { value: 'paid', label: 'שולם' },
-            ]}
-            value={bulkUpdateData.payment_status}
-            onChange={(e) => setBulkUpdateData(prev => ({ ...prev, payment_status: e.target.value }))}
-          />
-
+          <p className="text-gray-600 text-sm">בחרי את השדות לעדכון:</p>
+          <Select label="אמצעי תשלום" options={[{ value: '', label: '-- ללא שינוי --' }, ...paymentMethods.filter(p => p.value !== '')]} value={bulkUpdateData.payment_method} onChange={(e) => setBulkUpdateData(prev => ({ ...prev, payment_method: e.target.value }))} />
+          <Select label="קטגוריה" options={[{ value: '', label: '-- ללא שינוי --' }, ...categories.map(c => ({ value: c.id, label: c.name }))]} value={bulkUpdateData.category_id} onChange={(e) => setBulkUpdateData(prev => ({ ...prev, category_id: e.target.value }))} />
+          <Select label="לקוח" options={[{ value: '', label: '-- ללא שינוי --' }, ...customers.map(c => ({ value: c.id, label: c.name }))]} value={bulkUpdateData.customer_id} onChange={(e) => setBulkUpdateData(prev => ({ ...prev, customer_id: e.target.value }))} />
+          <Select label="סטטוס תשלום" options={[{ value: '', label: '-- ללא שינוי --' }, { value: 'pending', label: 'ממתין' }, { value: 'partial', label: 'שולם חלקית' }, { value: 'paid', label: 'שולם' }]} value={bulkUpdateData.payment_status} onChange={(e) => setBulkUpdateData(prev => ({ ...prev, payment_status: e.target.value }))} />
           <div className="flex gap-3 pt-4 border-t">
-            <Button onClick={handleBulkUpdate}>
-              <Check className="w-4 h-4" />
-              עדכן {selectedIds.size} הכנסות
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowBulkUpdateModal(false)
-                resetBulkUpdate()
-              }}
-            >
-              ביטול
-            </Button>
+            <Button onClick={handleBulkUpdate}><Check className="w-4 h-4" />עדכן {selectedIds.size} הכנסות</Button>
+            <Button variant="outline" onClick={() => { setShowBulkUpdateModal(false); setBulkUpdateData({ payment_method: '', category_id: '', customer_id: '', payment_status: '' }) }}>ביטול</Button>
           </div>
         </div>
       </Modal>
