@@ -570,8 +570,8 @@ export default function IncomePage() {
       let paymentTerms = translateValue(row.payment_terms, paymentTermsMap, '')
       let dueDate = row.due_date ? parseDate(row.due_date) : null
       
-      // קבלה/חשבונית מס קבלה - תנאי תשלום מיידי אם לא צוין
-      if ((docType === 'receipt' || docType === 'tax_invoice_receipt') && !paymentTerms) {
+      // קבלה/חשבונית מס קבלה/חשבונית עסקה - תנאי תשלום מיידי אם לא צוין
+      if ((docType === 'receipt' || docType === 'tax_invoice_receipt' || docType === 'invoice') && !paymentTerms) {
         paymentTerms = 'immediate'
       }
       
