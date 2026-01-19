@@ -15,7 +15,7 @@ import { formatCurrency, cn } from '@/lib/utils'
 import { 
   Plus, Pencil, Trash2, Play, Pause, Calendar, 
   Home, FileText, Landmark, CreditCard, Building, Shield,
-  Repeat, RefreshCw, Check, DollarSign, TrendingDown, AlertCircle
+  Repeat, RefreshCw, Check, DollarSign, TrendingDown, AlertCircle, User
 } from 'lucide-react'
 import type { Category, Supplier } from '@/types'
 
