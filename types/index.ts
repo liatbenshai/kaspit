@@ -114,6 +114,7 @@ export interface Income {
   invoice_number: string | null
   payment_status: 'pending' | 'partial' | 'paid'
   payment_date: string | null
+  bank_transaction_id: string | null
   created_by: string | null
   created_at: string
   // Relations
@@ -143,6 +144,8 @@ export interface Expense {
   paid_date: string | null
   is_recurring: boolean
   recurring_day: number | null
+  recurring_expense_id: string | null
+  bank_transaction_id: string | null
   created_by: string | null
   created_at: string
   // Relations

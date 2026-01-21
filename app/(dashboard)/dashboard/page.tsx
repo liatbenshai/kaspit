@@ -7,6 +7,7 @@ import { RevenueChart } from '@/components/dashboard/RevenueChart'
 import { BudgetProgress } from '@/components/dashboard/BudgetProgress'
 import { Insights } from '@/components/dashboard/Insights'
 import { CashFlowForecast } from '@/components/dashboard/CashFlowForecast'
+import { ActionCenter } from '@/components/dashboard/ActionCenter'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Select } from '@/components/ui/Select'
 import { supabase } from '@/lib/supabase'
@@ -429,6 +430,9 @@ export default function DashboardPage() {
         futureCount={stats.futureCount}
         overdueCount={stats.overdueCount}
       />
+
+      {/* Action Center - מרכז פעולות */}
+      {companyId && <ActionCenter companyId={companyId} />}
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
