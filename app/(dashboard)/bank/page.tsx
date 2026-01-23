@@ -15,40 +15,53 @@ import { supabase } from '@/lib/supabase'
 import { formatCurrency, formatDateShort, cn } from '@/lib/utils'
 import { Upload, Search, ArrowLeftRight, Tag, Repeat, Edit2, Check, RefreshCw, Home, User, Building, CreditCard, FileText, Landmark, CircleDollarSign, Zap, Droplets, Building2, Percent, CheckSquare, Square, Banknote, FileCheck, Shield, Sparkles } from 'lucide-react'
 import { Select } from '@/components/ui/Select'
-import type { BankTransaction } from '@/types'
+import type { BankTransaction, Category } from '@/types'
 
 // ==========================================
-// סוגי תנועות מורחב
+// סוגי תנועות קבועים (מערכת)
 // ==========================================
-const transactionTypes = [
-  { value: 'regular', label: 'רגיל (להתאמה)', icon: CircleDollarSign, color: 'gray' },
-  { value: 'vat_payment', label: 'מע״מ', icon: FileText, color: 'blue' },
-  { value: 'tax_payment', label: 'מס הכנסה', icon: FileText, color: 'blue' },
-  { value: 'social_security', label: 'ביטוח לאומי', icon: Landmark, color: 'teal' },
-  { value: 'arnona', label: 'ארנונה', icon: Building2, color: 'amber' },
-  { value: 'electricity', label: 'חשמל', icon: Zap, color: 'yellow' },
-  { value: 'water', label: 'מים', icon: Droplets, color: 'cyan' },
-  { value: 'gas', label: 'גז', icon: Zap, color: 'orange' },
-  { value: 'vaad_bayit', label: 'ועד בית', icon: Building, color: 'stone' },
-  { value: 'rent', label: 'שכירות', icon: Home, color: 'violet' },
-  { value: 'insurance', label: 'ביטוח', icon: Shield, color: 'emerald' },
-  { value: 'loan_payment', label: 'הלוואה', icon: Home, color: 'purple' },
-  { value: 'bank_fee', label: 'עמלת בנק', icon: Building, color: 'red' },
-  { value: 'interest_credit', label: 'ריבית זכות', icon: Percent, color: 'green' },
-  { value: 'interest_debit', label: 'ריבית חובה', icon: Percent, color: 'red' },
-  { value: 'check_deposited', label: 'צ׳ק שהופקד', icon: FileCheck, color: 'blue' },
-  { value: 'check_outgoing', label: 'צ׳ק יוצא', icon: FileText, color: 'orange' },
-  { value: 'cash_deposit', label: 'הפקדת מזומן', icon: Banknote, color: 'green' },
-  { value: 'cash_withdrawal', label: 'משיכת מזומן', icon: Banknote, color: 'orange' },
-  { value: 'credit_card_clearing', label: 'סליקת אשראי', icon: CreditCard, color: 'purple' },
-  { value: 'salary', label: 'משכורות', icon: CreditCard, color: 'indigo' },
-  { value: 'owner_withdrawal', label: 'משיכת בעלים', icon: User, color: 'orange' },
-  { value: 'owner_deposit', label: 'הפקדת בעלים', icon: User, color: 'green' },
-  { value: 'transfer_between', label: 'העברה בין חשבונות', icon: ArrowLeftRight, color: 'gray' },
-  { value: 'other', label: 'אחר', icon: Tag, color: 'gray' },
+const systemTransactionTypes = [
+  { value: 'regular', label: 'רגיל (להתאמה)', icon: CircleDollarSign, color: 'gray', group: 'system' },
+  { value: 'vat_payment', label: 'מע״מ', icon: FileText, color: 'blue', group: 'taxes' },
+  { value: 'tax_payment', label: 'מס הכנסה', icon: FileText, color: 'blue', group: 'taxes' },
+  { value: 'social_security', label: 'ביטוח לאומי', icon: Landmark, color: 'teal', group: 'taxes' },
+  { value: 'arnona', label: 'ארנונה', icon: Building2, color: 'amber', group: 'bills' },
+  { value: 'electricity', label: 'חשמל', icon: Zap, color: 'yellow', group: 'bills' },
+  { value: 'water', label: 'מים', icon: Droplets, color: 'cyan', group: 'bills' },
+  { value: 'gas', label: 'גז', icon: Zap, color: 'orange', group: 'bills' },
+  { value: 'vaad_bayit', label: 'ועד בית', icon: Building, color: 'stone', group: 'bills' },
+  { value: 'rent', label: 'שכירות', icon: Home, color: 'violet', group: 'bills' },
+  { value: 'insurance', label: 'ביטוח', icon: Shield, color: 'emerald', group: 'bills' },
+  { value: 'loan_payment', label: 'הלוואה', icon: Home, color: 'purple', group: 'bank' },
+  { value: 'bank_fee', label: 'עמלת בנק', icon: Building, color: 'red', group: 'bank' },
+  { value: 'interest_credit', label: 'ריבית זכות', icon: Percent, color: 'green', group: 'bank' },
+  { value: 'interest_debit', label: 'ריבית חובה', icon: Percent, color: 'red', group: 'bank' },
+  { value: 'check_deposited', label: 'צ׳ק שהופקד', icon: FileCheck, color: 'blue', group: 'payments' },
+  { value: 'check_outgoing', label: 'צ׳ק יוצא', icon: FileText, color: 'orange', group: 'payments' },
+  { value: 'cash_deposit', label: 'הפקדת מזומן', icon: Banknote, color: 'green', group: 'payments' },
+  { value: 'cash_withdrawal', label: 'משיכת מזומן', icon: Banknote, color: 'orange', group: 'payments' },
+  { value: 'credit_card_clearing', label: 'סליקת אשראי', icon: CreditCard, color: 'purple', group: 'payments' },
+  { value: 'salary', label: 'משכורות', icon: CreditCard, color: 'indigo', group: 'payroll' },
+  { value: 'owner_withdrawal', label: 'משיכת בעלים', icon: User, color: 'orange', group: 'owner' },
+  { value: 'owner_deposit', label: 'הפקדת בעלים', icon: User, color: 'green', group: 'owner' },
+  { value: 'transfer_between', label: 'העברה בין חשבונות', icon: ArrowLeftRight, color: 'gray', group: 'transfer' },
+  { value: 'pension', label: 'פנסיה', icon: Landmark, color: 'indigo', group: 'payroll' },
+  { value: 'other', label: 'אחר', icon: Tag, color: 'gray', group: 'other' },
 ]
 
-const getTransactionType = (type: string) => transactionTypes.find(t => t.value === type) || transactionTypes[0]
+const getTransactionType = (type: string, categories: Category[]) => {
+  // חפש קודם בסוגים הקבועים
+  const systemType = systemTransactionTypes.find(t => t.value === type)
+  if (systemType) return systemType
+  
+  // חפש בקטגוריות מה-database
+  const category = categories.find(c => `cat_${c.id}` === type)
+  if (category) {
+    return { value: type, label: category.name, icon: Tag, color: category.color || 'gray', group: 'custom' }
+  }
+  
+  return systemTransactionTypes[0]
+}
 
 // ==========================================
 // זיהוי אוטומטי של סוג תנועה
@@ -87,6 +100,7 @@ interface ExtendedBankTransaction extends BankTransaction {
 
 export default function BankPage() {
   const [transactions, setTransactions] = useState<ExtendedBankTransaction[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
   const [showImportModal, setShowImportModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -112,8 +126,14 @@ export default function BankPage() {
       const { data: profile } = await supabase.from('users').select('company_id').eq('id', user.id).single()
       if (!profile?.company_id) return
       setCompanyId(profile.company_id)
+      
+      // שליפת תנועות בנק
       const { data: transactionsData } = await supabase.from('bank_transactions').select('*').eq('company_id', profile.company_id).order('date', { ascending: false })
       setTransactions(transactionsData || [])
+      
+      // שליפת קטגוריות מה-database
+      const { data: categoriesData } = await supabase.from('categories').select('*').eq('company_id', profile.company_id).eq('is_active', true).order('name')
+      setCategories(categoriesData || [])
     } catch (error) {
       console.error('Error loading data:', error)
     } finally {
@@ -243,6 +263,21 @@ export default function BankPage() {
     return matchesSearch && matchesMonth && matchesType && matchesMatched
   })
 
+  // שילוב סוגים קבועים + קטגוריות מה-database
+  const allTransactionTypes = [
+    ...systemTransactionTypes,
+    // קו מפריד
+    ...(categories.length > 0 ? [{ value: '_divider', label: '── הקטגוריות שלי ──', icon: Tag, color: 'gray', group: 'divider', disabled: true }] : []),
+    // קטגוריות מה-database
+    ...categories.map(cat => ({
+      value: `cat_${cat.id}`,
+      label: cat.name,
+      icon: Tag,
+      color: cat.color || 'gray',
+      group: 'custom'
+    }))
+  ]
+
   const availableMonths = Array.from(new Set(transactions.map(t => t.date.substring(0, 7)))).sort().reverse()
   const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר']
   const matchedCount = transactions.filter(t => t.matched_type).length
@@ -288,7 +323,7 @@ export default function BankPage() {
             <Input placeholder="חיפוש..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pr-10" />
           </div>
           <Select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} options={[{ value: '', label: 'כל החודשים' }, ...availableMonths.map(m => { const [y, mo] = m.split('-'); return { value: m, label: `${monthNames[parseInt(mo) - 1]} ${y}` } })]} className="w-40" />
-          <Select value={filterType} onChange={(e) => setFilterType(e.target.value)} options={[{ value: '', label: 'כל הסוגים' }, ...transactionTypes.map(t => ({ value: t.value, label: t.label }))]} className="w-44" />
+          <Select value={filterType} onChange={(e) => setFilterType(e.target.value)} options={[{ value: '', label: 'כל הסוגים' }, ...allTransactionTypes.filter(t => t.value !== "_divider").map(t => ({ value: t.value, label: t.label }))]} className="w-44" />
           <Select value={filterMatched} onChange={(e) => setFilterMatched(e.target.value)} options={[{ value: '', label: 'כל הסטטוסים' }, { value: 'matched', label: 'מותאמות' }, { value: 'classified', label: 'מסווגות' }, { value: 'unmatched', label: 'ממתינות' }]} className="w-36" />
         </div>
       </Card>
@@ -311,7 +346,7 @@ export default function BankPage() {
             {filteredTransactions.length === 0 ? (
               <TableRow><TableCell colSpan={8} className="text-center py-8 text-gray-500">אין תנועות</TableCell></TableRow>
             ) : filteredTransactions.map((item) => {
-              const typeInfo = getTransactionType(item.transaction_type || 'regular')
+              const typeInfo = getTransactionType(item.transaction_type || 'regular', categories)
               const TypeIcon = typeInfo.icon
               const similarCount = findSimilarTransactions(item).length
               return (
@@ -355,7 +390,7 @@ export default function BankPage() {
                 <p className={cn("text-xl font-bold", selectedTransaction.amount >= 0 ? "text-success-600" : "text-danger-600")}>{formatCurrency(selectedTransaction.amount)}</p>
               </div>
             </div>
-            <Select label="סוג תנועה" options={transactionTypes.map(t => ({ value: t.value, label: t.label }))} value={editData.transaction_type} onChange={(e) => setEditData(prev => ({ ...prev, transaction_type: e.target.value }))} />
+            <Select label="סוג תנועה" options={allTransactionTypes.filter(t => t.value !== "_divider").map(t => ({ value: t.value, label: t.label }))} value={editData.transaction_type} onChange={(e) => setEditData(prev => ({ ...prev, transaction_type: e.target.value }))} />
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={editData.is_recurring} onChange={(e) => setEditData(prev => ({ ...prev, is_recurring: e.target.checked }))} className="w-4 h-4 text-primary-600 rounded" />
               <Repeat className="w-4 h-4 text-purple-600" /><span className="text-sm font-medium">תנועה חוזרת</span>
@@ -375,7 +410,7 @@ export default function BankPage() {
 
       <Modal isOpen={showBulkEditModal} onClose={() => setShowBulkEditModal(false)} title={`סיווג ${selectedIds.size} תנועות`}>
         <div className="space-y-4">
-          <Select label="סוג תנועה" options={[{ value: '', label: 'בחר סוג...' }, ...transactionTypes.map(t => ({ value: t.value, label: t.label }))]} value={bulkEditData.transaction_type} onChange={(e) => setBulkEditData(prev => ({ ...prev, transaction_type: e.target.value }))} />
+          <Select label="סוג תנועה" options={[{ value: '', label: 'בחר סוג...' }, ...allTransactionTypes.filter(t => t.value !== "_divider").map(t => ({ value: t.value, label: t.label }))]} value={bulkEditData.transaction_type} onChange={(e) => setBulkEditData(prev => ({ ...prev, transaction_type: e.target.value }))} />
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={bulkEditData.is_recurring} onChange={(e) => setBulkEditData(prev => ({ ...prev, is_recurring: e.target.checked }))} className="w-4 h-4 rounded" />
             <span className="text-sm">תנועה חוזרת</span>
