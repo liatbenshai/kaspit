@@ -68,12 +68,13 @@ export default function ReconciliationPage() {
       if (!profile?.company_id) return
       setCompanyId(profile.company_id)
 
-      // טעינת תנועות בנק לא מותאמות
+      // טעינת תנועות בנק לא מותאמות ולא מסווגות
       const { data: bankData } = await supabase
         .from('bank_transactions')
         .select('*')
         .eq('company_id', profile.company_id)
         .is('matched_id', null)
+        .or('transaction_type.is.null,transaction_type.eq.regular')
         .order('date', { ascending: false })
 
       // ספירת מותאמות
