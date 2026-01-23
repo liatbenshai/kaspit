@@ -163,7 +163,7 @@ export default function ReconciliationPage() {
           (income.customer as any)?.name || income.description || ''
         ) + paymentMethodBonus
 
-        if (score >= 40) {
+        if (score >= 30) {
           const reasons = getMatchReasons(
             absAmount,
             income.amount,
@@ -201,7 +201,7 @@ export default function ReconciliationPage() {
           (expense.supplier as any)?.name || expense.description || ''
         ) + paymentMethodBonus
 
-        if (score >= 40) {
+        if (score >= 30) {
           const reasons = getMatchReasons(
             absAmount,
             expense.amount,
@@ -229,6 +229,55 @@ export default function ReconciliationPage() {
     return suggestions.sort((a, b) => b.score - a.score).slice(0, 5)
   }
 
+  // ניקוי שם - הסרת תוארים וסימנים
+  const cleanName = (name: string): string => {
+    return name
+      .replace(/ד["״']?ר\.?/gi, '')
+      .replace(/עו["״']?ד\.?/gi, '')
+      .replace(/רו["״']?ח\.?/gi, '')
+      .replace(/פרופ['׳]?\.?/gi, '')
+      .replace(/מר\.?/gi, '')
+      .replace(/גב['׳]?\.?/gi, '')
+      .replace(/בע["״']?מ\.?/gi, '')
+      .replace(/מ\.?מ\.?/gi, '')
+      .replace(/[.,\-_'"״׳]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase()
+  }
+
+  // חישוב דמיון בין שני מחרוזות
+  const calculateSimilarity = (str1: string, str2: string): number => {
+    const s1 = cleanName(str1)
+    const s2 = cleanName(str2)
+    
+    if (!s1 || !s2) return 0
+    if (s1 === s2) return 100
+    
+    // בדיקה אם אחד מכיל את השני
+    if (s1.includes(s2) || s2.includes(s1)) return 80
+    
+    // פיצול למילים
+    const words1 = s1.split(/\s+/).filter(w => w.length > 1)
+    const words2 = s2.split(/\s+/).filter(w => w.length > 1)
+    
+    if (words1.length === 0 || words2.length === 0) return 0
+    
+    // ספירת מילים תואמות
+    let matchCount = 0
+    for (const w1 of words1) {
+      for (const w2 of words2) {
+        if (w1 === w2 || w1.includes(w2) || w2.includes(w1)) {
+          matchCount++
+          break
+        }
+      }
+    }
+    
+    const matchPercent = (matchCount / Math.min(words1.length, words2.length)) * 100
+    return Math.min(matchPercent, 100)
+  }
+
   // חישוב ציון התאמה
   const calculateMatchScore = (
     bankAmount: number,
@@ -245,8 +294,12 @@ export default function ReconciliationPage() {
     const amountPercent = (amountDiff / bankAmount) * 100
     if (amountDiff === 0) {
       score += 50
+    } else if (amountDiff < 1) {
+      score += 48 // הפרש של אגורות
     } else if (amountPercent <= 1) {
       score += 45
+    } else if (amountPercent <= 3) {
+      score += 40 // עמלת סליקה
     } else if (amountPercent <= 5) {
       score += 35
     } else if (amountPercent <= 10) {
@@ -262,22 +315,24 @@ export default function ReconciliationPage() {
     } else if (daysDiff <= 3) {
       score += 25
     } else if (daysDiff <= 7) {
-      score += 15
+      score += 20
     } else if (daysDiff <= 14) {
-      score += 10
+      score += 15
     } else if (daysDiff <= 30) {
+      score += 10
+    } else if (daysDiff <= 60) {
       score += 5
     }
 
-    // התאמת שם/תיאור (עד 20 נקודות)
-    const bankWords = bankDesc.toLowerCase().split(/\s+/)
-    const recordWords = recordName.toLowerCase().split(/\s+/)
-    const matchingWords = bankWords.filter(word => 
-      word.length > 2 && recordWords.some(rWord => rWord.includes(word) || word.includes(rWord))
-    )
-    if (matchingWords.length >= 2) {
+    // התאמת שם/תיאור (עד 30 נקודות) - משופר!
+    const similarity = calculateSimilarity(bankDesc, recordName)
+    if (similarity >= 80) {
+      score += 30
+    } else if (similarity >= 60) {
+      score += 25
+    } else if (similarity >= 40) {
       score += 20
-    } else if (matchingWords.length === 1) {
+    } else if (similarity >= 20) {
       score += 10
     }
 
@@ -312,12 +367,10 @@ export default function ReconciliationPage() {
     }
 
     if (recordName && bankDesc) {
-      const bankWords = bankDesc.toLowerCase().split(/\s+/)
-      const recordWords = recordName.toLowerCase().split(/\s+/)
-      const hasMatch = bankWords.some(word => 
-        word.length > 2 && recordWords.some(rWord => rWord.includes(word))
-      )
-      if (hasMatch) {
+      const similarity = calculateSimilarity(bankDesc, recordName)
+      if (similarity >= 80) {
+        reasons.push('שם זהה')
+      } else if (similarity >= 40) {
         reasons.push('שם דומה')
       }
     }
@@ -406,7 +459,7 @@ export default function ReconciliationPage() {
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-success-600 bg-success-50'
     if (score >= 60) return 'text-primary-600 bg-primary-50'
-    if (score >= 40) return 'text-warning-600 bg-warning-50'
+    if (score >= 30) return 'text-warning-600 bg-warning-50'
     return 'text-gray-600 bg-gray-50'
   }
 
