@@ -423,6 +423,21 @@ export default function IncomePage() {
       'שוטף +60': 'eom_plus_60', 'שוטף + 90': 'eom_plus_90', 'שוטף +90': 'eom_plus_90',
     }
 
+    // מיפוי אמצעי תשלום
+    const paymentMethodMap: Record<string, string> = {
+      'העברה בנקאית': 'bank_transfer',
+      'העברה': 'bank_transfer',
+      'כרטיס אשראי': 'credit_card',
+      'אשראי': 'credit_card',
+      'מזומן': 'cash',
+      'צ׳ק': 'check',
+      'צק': 'check',
+      'שיק': 'check',
+      'ביט': 'bit',
+      'ביט / פייבוקס': 'bit',
+      'פייבוקס': 'bit',
+    }
+
     const getValue = (row: Record<string, any>, ...keys: string[]): any => {
       for (const key of keys) {
         if (row[key] !== undefined && row[key] !== null && row[key] !== '') {
@@ -506,6 +521,10 @@ export default function IncomePage() {
       let dueDate = getValue(row, 'due_date') ? parseDate(getValue(row, 'due_date')) : null
       if (paymentTerms && !dueDate) dueDate = calculateDueDate(docDate, paymentTerms)
 
+      // אמצעי תשלום
+      const paymentMethodRaw = getValue(row, 'אמצעי תשלום', 'payment_method')?.toString().trim() || ''
+      const paymentMethod = paymentMethodMap[paymentMethodRaw] || null
+
       return {
         company_id: companyId,
         category_id: null,
@@ -519,9 +538,10 @@ export default function IncomePage() {
         date: docDate,
         due_date: dueDate,
         payment_terms: paymentTerms || null,
-        description: null,
+        description: getValue(row, 'תיאור', 'description')?.toString() || null,
         invoice_number: getValue(row, 'מספר מסמך', 'מספר המסמך', 'invoice_number')?.toString() || null,
         payment_status: paymentStatus,
+        payment_method: paymentMethod,
         _customer_name: customerName,
       }
     })
@@ -744,7 +764,9 @@ export default function IncomePage() {
     { key: 'סכום לפני מע״מ', label: 'סכום לפני מע״מ', required: false },
     { key: 'מע״מ', label: 'מע״מ', required: false },
     { key: 'תנאי תשלום', label: 'תנאי תשלום', required: false },
+    { key: 'אמצעי תשלום', label: 'אמצעי תשלום', required: false },
     { key: 'סטטוס', label: 'סטטוס', required: false },
+    { key: 'תיאור', label: 'תיאור', required: false },
   ]
 
   return (
