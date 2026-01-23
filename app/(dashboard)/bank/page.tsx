@@ -154,7 +154,7 @@ export default function BankPage() {
         import_batch_id: batchId,
         transaction_type: classification?.transaction_type || 'regular',
         is_recurring: classification?.is_recurring || false,
-        recurring_label: classification?.recurring_label || null,
+        recurring_label: classification?.recurring_label || undefined,
       }
     })
 
