@@ -44,6 +44,8 @@ export default function ReconciliationPage() {
   const [showMatchModal, setShowMatchModal] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [manualSearch, setManualSearch] = useState('')
+  const [showAllItems, setShowAllItems] = useState(false)
 
   // נתונים להתאמה
   const [incomeList, setIncomeList] = useState<Income[]>([])
@@ -342,6 +344,39 @@ export default function ReconciliationPage() {
       setSuccessMessage('ההתאמה נשמרה בהצלחה!')
       setShowMatchModal(false)
       setSelectedTransaction(null)
+      setManualSearch('')
+      setShowAllItems(false)
+      loadData()
+
+      setTimeout(() => setSuccessMessage(null), 3000)
+    } catch (error) {
+      console.error('Error saving match:', error)
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  // התאמה ידנית
+  const handleManualMatch = async (transaction: BankTransaction, item: Income | Expense, type: 'income' | 'expense') => {
+    if (!companyId) return
+    setProcessing(true)
+
+    try {
+      const { error } = await supabase
+        .from('bank_transactions')
+        .update({
+          matched_type: type,
+          matched_id: item.id
+        })
+        .eq('id', transaction.id)
+
+      if (error) throw error
+
+      setSuccessMessage('ההתאמה נשמרה בהצלחה!')
+      setShowMatchModal(false)
+      setSelectedTransaction(null)
+      setManualSearch('')
+      setShowAllItems(false)
       loadData()
 
       setTimeout(() => setSuccessMessage(null), 3000)
@@ -555,9 +590,11 @@ export default function ReconciliationPage() {
         onClose={() => {
           setShowMatchModal(false)
           setSelectedTransaction(null)
+          setManualSearch('')
+          setShowAllItems(false)
         }}
         title="בחירת התאמה"
-        size="lg"
+        size="xl"
       >
         {selectedTransaction && (
           <div className="space-y-4">
@@ -578,64 +615,157 @@ export default function ReconciliationPage() {
               </div>
             </div>
 
-            {/* הצעות התאמה */}
-            <div>
-              <p className="text-sm font-medium text-gray-700 mb-3">
-                {selectedTransaction.amount >= 0 ? 'הכנסות מתאימות:' : 'הוצאות מתאימות:'}
-              </p>
-              
-              {selectedTransaction.suggestions && selectedTransaction.suggestions.length > 0 ? (
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {selectedTransaction.suggestions.map((suggestion, idx) => (
-                    <div 
-                      key={idx}
-                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={cn(
-                            'px-2 py-0.5 rounded text-xs font-bold',
-                            getScoreColor(suggestion.score)
-                          )}>
-                            {suggestion.score}% התאמה
-                          </span>
-                          {suggestion.reasons.map((reason, i) => (
-                            <Badge key={i} variant="default" className="text-xs">
-                              {reason}
-                            </Badge>
-                          ))}
-                        </div>
-                        <p className="font-medium text-gray-900">
-                          {suggestion.type === 'income'
-                            ? (suggestion.item as Income).description || (suggestion.item as any).customer?.name || 'הכנסה'
-                            : (suggestion.item as Expense).description || (suggestion.item as any).supplier?.name || 'הוצאה'
-                          }
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {formatDateShort(suggestion.item.date)} • {formatCurrency(suggestion.item.amount)}
-                          {suggestion.item.invoice_number && ` • מס׳ ${suggestion.item.invoice_number}`}
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        onClick={() => handleApproveMatch(selectedTransaction, suggestion)}
-                        loading={processing}
-                      >
-                        <Check className="w-4 h-4" />
-                        אשר
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="p-4 bg-gray-50 rounded-lg text-center">
-                  <p className="text-gray-500">לא נמצאו התאמות אוטומטיות</p>
-                  <p className="text-sm text-gray-400 mt-1">
-                    נסי להוסיף את ה{selectedTransaction.amount >= 0 ? 'הכנסה' : 'הוצאה'} ידנית
-                  </p>
-                </div>
-              )}
+            {/* טאבים - הצעות אוטומטיות / חיפוש ידני */}
+            <div className="flex gap-2 border-b">
+              <button
+                onClick={() => setShowAllItems(false)}
+                className={cn(
+                  'px-4 py-2 text-sm font-medium border-b-2 -mb-px',
+                  !showAllItems ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                )}
+              >
+                הצעות אוטומטיות ({selectedTransaction.suggestions?.length || 0})
+              </button>
+              <button
+                onClick={() => setShowAllItems(true)}
+                className={cn(
+                  'px-4 py-2 text-sm font-medium border-b-2 -mb-px',
+                  showAllItems ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                )}
+              >
+                חיפוש ידני
+              </button>
             </div>
+
+            {showAllItems ? (
+              /* חיפוש ידני */
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder={`חפש ${selectedTransaction.amount >= 0 ? 'הכנסה' : 'הוצאה'} לפי שם, מספר חשבונית או סכום...`}
+                    value={manualSearch}
+                    onChange={(e) => setManualSearch(e.target.value)}
+                    className="w-full pr-10 pl-4 py-2 border rounded-lg text-sm"
+                  />
+                </div>
+                
+                <div className="max-h-72 overflow-y-auto space-y-2">
+                  {(selectedTransaction.amount >= 0 ? incomeList : expenseList)
+                    .filter(item => {
+                      if (!manualSearch) return true
+                      const search = manualSearch.toLowerCase()
+                      const name = selectedTransaction.amount >= 0 
+                        ? ((item as any).customer?.name || (item as Income).description || '')
+                        : ((item as any).supplier?.name || (item as Expense).description || '')
+                      return (
+                        name.toLowerCase().includes(search) ||
+                        item.invoice_number?.toLowerCase().includes(search) ||
+                        item.amount.toString().includes(search)
+                      )
+                    })
+                    .slice(0, 50)
+                    .map((item, idx) => (
+                      <div 
+                        key={idx}
+                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
+                      >
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900">
+                            {selectedTransaction.amount >= 0
+                              ? ((item as any).customer?.name || (item as Income).description || 'הכנסה')
+                              : ((item as any).supplier?.name || (item as Expense).description || 'הוצאה')
+                            }
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {formatDateShort(item.date)} • {formatCurrency(item.amount)}
+                            {item.invoice_number && ` • מס׳ ${item.invoice_number}`}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => handleManualMatch(selectedTransaction, item, selectedTransaction.amount >= 0 ? 'income' : 'expense')}
+                          loading={processing}
+                        >
+                          <Check className="w-4 h-4" />
+                          התאם
+                        </Button>
+                      </div>
+                    ))}
+                  {(selectedTransaction.amount >= 0 ? incomeList : expenseList).length === 0 && (
+                    <p className="text-center text-gray-500 py-4">
+                      אין {selectedTransaction.amount >= 0 ? 'הכנסות' : 'הוצאות'} במערכת
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* הצעות אוטומטיות */
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-3">
+                  {selectedTransaction.amount >= 0 ? 'הכנסות מתאימות:' : 'הוצאות מתאימות:'}
+                </p>
+                
+                {selectedTransaction.suggestions && selectedTransaction.suggestions.length > 0 ? (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {selectedTransaction.suggestions.map((suggestion, idx) => (
+                      <div 
+                        key={idx}
+                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={cn(
+                              'px-2 py-0.5 rounded text-xs font-bold',
+                              getScoreColor(suggestion.score)
+                            )}>
+                              {suggestion.score}% התאמה
+                            </span>
+                            {suggestion.reasons.map((reason, i) => (
+                              <Badge key={i} variant="default" className="text-xs">
+                                {reason}
+                              </Badge>
+                            ))}
+                          </div>
+                          <p className="font-medium text-gray-900">
+                            {suggestion.type === 'income'
+                              ? (suggestion.item as Income).description || (suggestion.item as any).customer?.name || 'הכנסה'
+                              : (suggestion.item as Expense).description || (suggestion.item as any).supplier?.name || 'הוצאה'
+                            }
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {formatDateShort(suggestion.item.date)} • {formatCurrency(suggestion.item.amount)}
+                            {suggestion.item.invoice_number && ` • מס׳ ${suggestion.item.invoice_number}`}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => handleApproveMatch(selectedTransaction, suggestion)}
+                          loading={processing}
+                        >
+                          <Check className="w-4 h-4" />
+                          אשר
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 bg-gray-50 rounded-lg text-center">
+                    <p className="text-gray-500">לא נמצאו התאמות אוטומטיות</p>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="mt-2"
+                      onClick={() => setShowAllItems(true)}
+                    >
+                      <Search className="w-4 h-4" />
+                      חפש ידנית
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* כפתורי סגירה */}
             <div className="flex justify-end gap-2 pt-4 border-t">
@@ -644,6 +774,8 @@ export default function ReconciliationPage() {
                 onClick={() => {
                   setShowMatchModal(false)
                   setSelectedTransaction(null)
+                  setManualSearch('')
+                  setShowAllItems(false)
                 }}
               >
                 סגור

@@ -202,8 +202,28 @@ export default function BankPage() {
 
   const saveTransaction = async () => {
     if (!selectedTransaction) return
-    await supabase.from('bank_transactions').update({ transaction_type: editData.transaction_type, is_recurring: editData.is_recurring, recurring_label: editData.recurring_label || null, notes: editData.notes || null }).eq('id', selectedTransaction.id)
-    setShowEditModal(false); setSelectedTransaction(null); setSuccessMessage('עודכן!'); loadData()
+    try {
+      const { error } = await supabase.from('bank_transactions').update({ 
+        transaction_type: editData.transaction_type, 
+        is_recurring: editData.is_recurring, 
+        recurring_label: editData.recurring_label || null, 
+        notes: editData.notes || null 
+      }).eq('id', selectedTransaction.id)
+      
+      if (error) {
+        console.error('Error saving:', error)
+        setError(`שגיאה בשמירה: ${error.message}`)
+        return
+      }
+      
+      setShowEditModal(false)
+      setSelectedTransaction(null)
+      setSuccessMessage('עודכן בהצלחה!')
+      loadData()
+    } catch (err: any) {
+      console.error('Error:', err)
+      setError(`שגיאה: ${err.message}`)
+    }
   }
 
   const findSimilarTransactions = (transaction: ExtendedBankTransaction) => transactions.filter(t => t.id !== transaction.id && t.description === transaction.description && Math.abs(t.amount - transaction.amount) < 1 && (!t.transaction_type || t.transaction_type === 'regular'))
