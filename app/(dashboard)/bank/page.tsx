@@ -140,7 +140,7 @@ export default function BankPage() {
       if (!classification && description) {
         const detectedType = autoDetectTransactionType(description, amount)
         if (detectedType !== 'regular') {
-          classification = { transaction_type: detectedType, is_recurring: false, recurring_label: null }
+          classification = { transaction_type: detectedType, is_recurring: false, recurring_label: '' }
         }
       }
       if (classification) autoClassifiedCount++
