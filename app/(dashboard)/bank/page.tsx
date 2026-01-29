@@ -13,7 +13,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { ExcelImport } from '@/components/import/ExcelImport'
 import { supabase } from '@/lib/supabase'
 import { formatCurrency, formatDateShort, cn } from '@/lib/utils'
-import { Upload, Search, ArrowLeftRight, Tag, Repeat, Edit2, Check, RefreshCw, Home, User, Building, CreditCard, FileText, Landmark, CircleDollarSign, Zap, Droplets, Building2, Percent, CheckSquare, Square, Banknote, FileCheck, Shield, Sparkles } from 'lucide-react'
+import { Upload, Search, ArrowLeftRight, Tag, Repeat, Edit2, Check, RefreshCw, Home, User, Building, CreditCard, FileText, Landmark, CircleDollarSign, Zap, Droplets, Building2, Percent, CheckSquare, Square, Banknote, FileCheck, Shield, Sparkles, Trash2 } from 'lucide-react'
 import { Select } from '@/components/ui/Select'
 import type { BankTransaction, Category } from '@/types'
 
@@ -255,6 +255,34 @@ export default function BankPage() {
     setSuccessMessage(`עודכנו ${ids.length + 1} תנועות!`); setShowEditModal(false); loadData()
   }
 
+  // מחיקת תנועה בודדת
+  const handleDelete = async (id: string) => {
+    if (!confirm('האם למחוק תנועה זו?')) return
+    try {
+      const { error } = await supabase.from('bank_transactions').delete().eq('id', id)
+      if (error) throw error
+      setSuccessMessage('התנועה נמחקה בהצלחה')
+      loadData()
+    } catch (err: any) {
+      setError(`שגיאה במחיקה: ${err.message}`)
+    }
+  }
+
+  // מחיקה המונית
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+    if (!confirm(`האם למחוק ${selectedIds.size} תנועות?`)) return
+    try {
+      const { error } = await supabase.from('bank_transactions').delete().in('id', Array.from(selectedIds))
+      if (error) throw error
+      setSuccessMessage(`נמחקו ${selectedIds.size} תנועות בהצלחה!`)
+      clearSelection()
+      loadData()
+    } catch (err: any) {
+      setError(`שגיאה במחיקה: ${err.message}`)
+    }
+  }
+
   const filteredTransactions = transactions.filter(item => {
     const matchesSearch = !searchTerm || item.description?.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesMonth = !selectedMonth || item.date.startsWith(selectedMonth)
@@ -303,6 +331,7 @@ export default function BankPage() {
             <span className="font-medium">נבחרו {selectedIds.size} תנועות</span>
             <div className="flex gap-2">
               <Button size="sm" onClick={() => setShowBulkEditModal(true)}>סווג נבחרות</Button>
+              <Button size="sm" variant="danger" onClick={handleBulkDelete}><Trash2 className="w-4 h-4" />מחק נבחרות</Button>
               <Button size="sm" variant="outline" onClick={clearSelection}>ביטול</Button>
             </div>
           </div>
@@ -371,6 +400,7 @@ export default function BankPage() {
                     <div className="flex items-center gap-2">
                       <Button size="sm" variant="ghost" onClick={() => openEditModal(item)} title="סיווג"><Edit2 className="w-4 h-4" /></Button>
                       {!item.matched_type && (!item.transaction_type || item.transaction_type === 'regular') && <Link href="/reconciliation"><Button size="sm" variant="ghost" title="התאם"><ArrowLeftRight className="w-4 h-4" /></Button></Link>}
+                      <Button size="sm" variant="ghost" onClick={() => handleDelete(item.id)} title="מחק" className="text-gray-400 hover:text-danger-600"><Trash2 className="w-4 h-4" /></Button>
                       {similarCount > 0 && !item.is_recurring && <Badge variant="warning" size="sm">{similarCount} דומות</Badge>}
                     </div>
                   </TableCell>
