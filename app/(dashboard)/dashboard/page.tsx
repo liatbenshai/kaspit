@@ -210,14 +210,12 @@ export default function DashboardPage() {
       // חישוב פירוט הכנסות לפי סוגי מסמכים
       // ========================================
       
-      // נכנס בפועל: 
-      // - קבלות (תמיד)
-      // - חשבוניות מס קבלה (תמיד - זה מסמך שמעיד על תשלום)
-      // - חשבוניות מס ששולמו
+      // נכנס בפועל (תזרים): 
+      // - קבלות
+      // - חשבוניות מס קבלה (מסמך שמשלב חשבונית מס + קבלה)
       const actualReceivedDocs = periodIncome?.filter(i => 
         i.document_type === 'receipt' || 
-        i.document_type === 'tax_invoice_receipt' ||
-        (i.document_type === 'tax_invoice' && i.payment_status === 'paid')
+        i.document_type === 'tax_invoice_receipt'
       ) || []
       const actualReceived = actualReceivedDocs.reduce((sum, i) => sum + Number(i.amount), 0)
       
@@ -226,19 +224,21 @@ export default function DashboardPage() {
       const issuedForVatDocs = periodIncome?.filter(i => vatDocTypes.includes(i.document_type)) || []
       const issuedForVat = issuedForVatDocs.reduce((sum, i) => sum + Number(i.amount), 0)
       
-      // צפי גבייה: חשבוניות עסקה פתוחות + חשבוניות מס שלא שולמו
-      // (לא כולל חשבוניות מס קבלה - הן תמיד מייצגות תשלום שהתקבל)
-      const expectedCollectionDocs = periodIncome?.filter(i => {
-        // חשבוניות עסקה פתוחות
-        if (i.document_type === 'invoice' && i.document_status === 'open') return true
-        // חשבוניות מס שלא שולמו (לא כולל חשבוניות מס קבלה)
-        if (i.document_type === 'tax_invoice' && i.payment_status !== 'paid') return true
-        return false
-      }) || []
+      // תשלומים עתידיים: חשבוניות עסקה + חשבוניות מס
+      // (הכסף מתועד בקבלה נפרדת, לא בחשבונית עצמה)
+      const expectedCollectionDocs = periodIncome?.filter(i => 
+        i.document_type === 'invoice' || 
+        i.document_type === 'tax_invoice'
+      ) || []
       const expectedCollection = expectedCollectionDocs.reduce((sum, i) => sum + Number(i.amount), 0)
       
-      // באיחור: מתוך צפי הגבייה - אלה שעבר תאריך היעד
-      const overdueDocs = expectedCollectionDocs.filter(i => i.due_date && i.due_date < today)
+      // באיחור: חשבוניות עסקה וחשבוניות מס שעבר תאריך היעד שלהן ולא שולמו
+      const overdueDocs = periodIncome?.filter(i => 
+        (i.document_type === 'invoice' || i.document_type === 'tax_invoice') &&
+        i.due_date && 
+        i.due_date < today &&
+        i.payment_status !== 'paid'
+      ) || []
       const overdueAmount = overdueDocs.reduce((sum, i) => sum + Number(i.amount), 0)
 
       setStats({

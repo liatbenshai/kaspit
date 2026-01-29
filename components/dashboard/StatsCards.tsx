@@ -78,7 +78,7 @@ export function StatsCards({
                   {formatCurrency(incomeBreakdown.actualReceived)}
                 </p>
                 <p className="text-xs text-green-600 mt-2">
-                  {incomeBreakdown.actualReceivedCount} מסמכים (קבלות, חשבוניות מס קבלה, חשבוניות מס ששולמו)
+                  {incomeBreakdown.actualReceivedCount} קבלות וחשבוניות מס קבלה
                 </p>
               </div>
               <div className="p-3 rounded-xl bg-green-100">
@@ -122,7 +122,7 @@ export function StatsCards({
                   incomeBreakdown.expectedCollection > 0 ? "text-amber-700" : "text-gray-500"
                 )}>
                   <CalendarClock className="w-4 h-4" />
-                  צפי גבייה
+                  תשלומים עתידיים
                 </p>
                 <p className={cn(
                   "text-2xl font-bold mt-1",
@@ -135,7 +135,7 @@ export function StatsCards({
                   incomeBreakdown.expectedCollection > 0 ? "text-amber-600" : "text-gray-400"
                 )}>
                   {incomeBreakdown.expectedCollectionCount > 0 
-                    ? `${incomeBreakdown.expectedCollectionCount} חשבוניות (עסקה פתוחות + מס לא שולמו)`
+                    ? `${incomeBreakdown.expectedCollectionCount} חשבוניות עסקה וחשבוניות מס`
                     : 'אין חשבוניות ממתינות 🎉'
                   }
                 </p>
