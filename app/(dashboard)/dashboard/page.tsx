@@ -224,6 +224,15 @@ export default function DashboardPage() {
       const issuedForVatDocs = periodIncome?.filter(i => vatDocTypes.includes(i.document_type)) || []
       const issuedForVat = issuedForVatDocs.reduce((sum, i) => sum + Number(i.amount), 0)
       
+      // DEBUG - לבדיקה
+      console.log('=== DEBUG INCOME BREAKDOWN ===')
+      console.log('Total period income records:', periodIncome?.length)
+      console.log('Document types in data:', [...new Set(periodIncome?.map(i => i.document_type))])
+      console.log('tax_invoice count:', periodIncome?.filter(i => i.document_type === 'tax_invoice').length)
+      console.log('tax_invoice_receipt count:', periodIncome?.filter(i => i.document_type === 'tax_invoice_receipt').length)
+      console.log('issuedForVatDocs count:', issuedForVatDocs.length)
+      console.log('issuedForVat total:', issuedForVat)
+      
       // תשלומים עתידיים: חשבוניות עסקה + חשבוניות מס
       // (הכסף מתועד בקבלה נפרדת, לא בחשבונית עצמה)
       const expectedCollectionDocs = periodIncome?.filter(i => 
