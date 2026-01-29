@@ -78,7 +78,7 @@ export function StatsCards({
                   {formatCurrency(incomeBreakdown.actualReceived)}
                 </p>
                 <p className="text-xs text-green-600 mt-2">
-                  {incomeBreakdown.actualReceivedCount} קבלות/חשבוניות מס קבלה
+                  {incomeBreakdown.actualReceivedCount} מסמכים (קבלות, חשבוניות מס קבלה, חשבוניות מס ששולמו)
                 </p>
               </div>
               <div className="p-3 rounded-xl bg-green-100">
@@ -135,7 +135,7 @@ export function StatsCards({
                   incomeBreakdown.expectedCollection > 0 ? "text-amber-600" : "text-gray-400"
                 )}>
                   {incomeBreakdown.expectedCollectionCount > 0 
-                    ? `${incomeBreakdown.expectedCollectionCount} חשבוניות ממתינות`
+                    ? `${incomeBreakdown.expectedCollectionCount} חשבוניות (עסקה פתוחות + מס לא שולמו)`
                     : 'אין חשבוניות ממתינות 🎉'
                   }
                 </p>

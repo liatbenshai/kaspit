@@ -210,10 +210,14 @@ export default function DashboardPage() {
       // חישוב פירוט הכנסות לפי סוגי מסמכים
       // ========================================
       
-      // נכנס בפועל: קבלות + חשבוניות מס קבלה (ששולמו)
+      // נכנס בפועל: 
+      // - קבלות (תמיד)
+      // - חשבוניות מס קבלה (תמיד - זה מסמך שמעיד על תשלום)
+      // - חשבוניות מס ששולמו
       const actualReceivedDocs = periodIncome?.filter(i => 
         i.document_type === 'receipt' || 
-        (i.document_type === 'tax_invoice_receipt' && i.payment_status === 'paid')
+        i.document_type === 'tax_invoice_receipt' ||
+        (i.document_type === 'tax_invoice' && i.payment_status === 'paid')
       ) || []
       const actualReceived = actualReceivedDocs.reduce((sum, i) => sum + Number(i.amount), 0)
       
@@ -223,11 +227,12 @@ export default function DashboardPage() {
       const issuedForVat = issuedForVatDocs.reduce((sum, i) => sum + Number(i.amount), 0)
       
       // צפי גבייה: חשבוניות עסקה פתוחות + חשבוניות מס שלא שולמו
+      // (לא כולל חשבוניות מס קבלה - הן תמיד מייצגות תשלום שהתקבל)
       const expectedCollectionDocs = periodIncome?.filter(i => {
         // חשבוניות עסקה פתוחות
         if (i.document_type === 'invoice' && i.document_status === 'open') return true
-        // חשבוניות מס שלא שולמו
-        if (vatDocTypes.includes(i.document_type) && i.payment_status !== 'paid') return true
+        // חשבוניות מס שלא שולמו (לא כולל חשבוניות מס קבלה)
+        if (i.document_type === 'tax_invoice' && i.payment_status !== 'paid') return true
         return false
       }) || []
       const expectedCollection = expectedCollectionDocs.reduce((sum, i) => sum + Number(i.amount), 0)
