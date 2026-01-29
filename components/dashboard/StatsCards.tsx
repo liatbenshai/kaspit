@@ -2,8 +2,23 @@
 
 import { Card } from '@/components/ui/Card'
 import { formatCurrency, calculateChange } from '@/lib/utils'
-import { TrendingUp, TrendingDown, Wallet, ArrowUp, ArrowDown, Building2, CheckCircle, AlertCircle, Link2, Clock, CalendarClock } from 'lucide-react'
+import { TrendingUp, TrendingDown, Wallet, ArrowUp, ArrowDown, Building2, CheckCircle, AlertCircle, Link2, Clock, CalendarClock, Banknote, FileText, Receipt } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+interface IncomeBreakdown {
+  // נכנס בפועל - חשבונית מס קבלה + קבלה (ששולמו)
+  actualReceived: number
+  actualReceivedCount: number
+  // הופק לדיווח מע"מ - חשבונית מס + חשבונית מס קבלה
+  issuedForVat: number
+  issuedForVatCount: number
+  // צפי גבייה - חשבוניות עסקה פתוחות + חשבוניות מס לא שולמו
+  expectedCollection: number
+  expectedCollectionCount: number
+  // באיחור
+  overdueAmount: number
+  overdueCount: number
+}
 
 interface StatsCardsProps {
   totalIncome: number
@@ -15,11 +30,13 @@ interface StatsCardsProps {
   // נתוני התאמה
   matchedTransactions?: number
   unmatchedTransactions?: number
-  // הכנסות עתידיות ובאיחור
+  // הכנסות עתידיות ובאיחור (legacy - לתאימות אחורה)
   futureIncome?: number
   overdueIncome?: number
   futureCount?: number
   overdueCount?: number
+  // פירוט הכנסות חדש
+  incomeBreakdown?: IncomeBreakdown
 }
 
 export function StatsCards({
@@ -35,46 +52,133 @@ export function StatsCards({
   overdueIncome = 0,
   futureCount = 0,
   overdueCount = 0,
+  incomeBreakdown,
 }: StatsCardsProps) {
   const incomeChange = calculateChange(totalIncome, prevIncome)
   const expensesChange = calculateChange(totalExpenses, prevExpenses)
-  const profit = totalIncome - totalExpenses
+  
+  // השתמש ב-actualReceived לחישוב הרווח האמיתי אם זמין
+  const actualIncome = incomeBreakdown?.actualReceived ?? totalIncome
+  const profit = actualIncome - totalExpenses
 
   return (
     <div className="space-y-4">
-      {/* שורה ראשונה - הכנסות, הוצאות, רווח */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* הכנסות */}
-        <Card padding="md">
+      {/* שורה ראשונה - 3 סוגי הכנסות */}
+      {incomeBreakdown && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* נכנס בפועל */}
+          <Card padding="md" className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-700 font-medium flex items-center gap-1">
+                  <Banknote className="w-4 h-4" />
+                  נכנס בפועל
+                </p>
+                <p className="text-2xl font-bold text-green-800 mt-1">
+                  {formatCurrency(incomeBreakdown.actualReceived)}
+                </p>
+                <p className="text-xs text-green-600 mt-2">
+                  {incomeBreakdown.actualReceivedCount} קבלות/חשבוניות מס קבלה
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-green-100">
+                <Receipt className="w-6 h-6 text-green-600" />
+              </div>
+            </div>
+          </Card>
+
+          {/* הופק לדיווח מע"מ */}
+          <Card padding="md" className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-blue-700 font-medium flex items-center gap-1">
+                  <FileText className="w-4 h-4" />
+                  הופק לדיווח מע״מ
+                </p>
+                <p className="text-2xl font-bold text-blue-800 mt-1">
+                  {formatCurrency(incomeBreakdown.issuedForVat)}
+                </p>
+                <p className="text-xs text-blue-600 mt-2">
+                  {incomeBreakdown.issuedForVatCount} חשבוניות מס
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-blue-100">
+                <FileText className="w-6 h-6 text-blue-600" />
+              </div>
+            </div>
+          </Card>
+
+          {/* צפי גבייה */}
+          <Card padding="md" className={cn(
+            "bg-gradient-to-br border",
+            incomeBreakdown.expectedCollection > 0 
+              ? "from-amber-50 to-orange-50 border-amber-200" 
+              : "from-gray-50 to-slate-50 border-gray-200"
+          )}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={cn(
+                  "text-sm font-medium flex items-center gap-1",
+                  incomeBreakdown.expectedCollection > 0 ? "text-amber-700" : "text-gray-500"
+                )}>
+                  <CalendarClock className="w-4 h-4" />
+                  צפי גבייה
+                </p>
+                <p className={cn(
+                  "text-2xl font-bold mt-1",
+                  incomeBreakdown.expectedCollection > 0 ? "text-amber-800" : "text-gray-400"
+                )}>
+                  {formatCurrency(incomeBreakdown.expectedCollection)}
+                </p>
+                <p className={cn(
+                  "text-xs mt-2",
+                  incomeBreakdown.expectedCollection > 0 ? "text-amber-600" : "text-gray-400"
+                )}>
+                  {incomeBreakdown.expectedCollectionCount > 0 
+                    ? `${incomeBreakdown.expectedCollectionCount} חשבוניות ממתינות`
+                    : 'אין חשבוניות ממתינות 🎉'
+                  }
+                </p>
+              </div>
+              <div className={cn(
+                "p-3 rounded-xl",
+                incomeBreakdown.expectedCollection > 0 ? "bg-amber-100" : "bg-gray-100"
+              )}>
+                <CalendarClock className={cn(
+                  "w-6 h-6",
+                  incomeBreakdown.expectedCollection > 0 ? "text-amber-600" : "text-gray-400"
+                )} />
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* באיחור - אזהרה */}
+      {incomeBreakdown && incomeBreakdown.overdueAmount > 0 && (
+        <Card padding="md" className="bg-gradient-to-br from-red-50 to-rose-50 border-red-300">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">הכנסות {periodLabel}</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
-                {formatCurrency(totalIncome)}
+              <p className="text-sm text-red-700 font-medium flex items-center gap-1">
+                <AlertCircle className="w-4 h-4" />
+                באיחור - דורש טיפול!
               </p>
-              {prevIncome > 0 && (
-                <div className="flex items-center mt-2">
-                  {incomeChange > 0 ? (
-                    <ArrowUp className="w-4 h-4 text-success-500" />
-                  ) : incomeChange < 0 ? (
-                    <ArrowDown className="w-4 h-4 text-danger-500" />
-                  ) : null}
-                  <span className={cn(
-                    'text-sm font-medium mr-1',
-                    incomeChange > 0 ? 'text-success-500' : incomeChange < 0 ? 'text-danger-500' : 'text-gray-500'
-                  )}>
-                    {Math.abs(incomeChange)}%
-                  </span>
-                  <span className="text-xs text-gray-400 mr-1">מתקופה קודמת</span>
-                </div>
-              )}
+              <p className="text-2xl font-bold text-red-700 mt-1">
+                {formatCurrency(incomeBreakdown.overdueAmount)}
+              </p>
+              <a href="/collection" className="text-xs text-red-600 hover:underline mt-2 inline-block">
+                {incomeBreakdown.overdueCount} חשבוניות לגבייה →
+              </a>
             </div>
-            <div className="p-3 rounded-xl bg-success-50">
-              <TrendingUp className="w-6 h-6 text-success-600" />
+            <div className="p-3 rounded-xl bg-red-100">
+              <Clock className="w-6 h-6 text-red-600" />
             </div>
           </div>
         </Card>
+      )}
 
+      {/* שורה שנייה - הוצאות ורווח */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* הוצאות */}
         <Card padding="md">
           <div className="flex items-center justify-between">
@@ -106,11 +210,14 @@ export function StatsCards({
           </div>
         </Card>
 
-        {/* רווח/הפסד */}
+        {/* רווח/הפסד - מחושב מ"נכנס בפועל" */}
         <Card padding="md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">רווח/הפסד {periodLabel}</p>
+              <p className="text-sm text-gray-500">
+                רווח/הפסד {periodLabel}
+                {incomeBreakdown && <span className="text-xs block text-gray-400">(לפי נכנס בפועל)</span>}
+              </p>
               <p className={cn(
                 'text-2xl font-bold mt-1',
                 profit >= 0 ? 'text-success-600' : 'text-danger-600'
@@ -132,31 +239,31 @@ export function StatsCards({
             </div>
           </div>
         </Card>
-      </div>
 
-      {/* שורה שנייה - יתרת בנק והתאמות */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* יתרת בנק */}
-        <Card padding="md" className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+        <Card padding="md" className="bg-gradient-to-br from-slate-50 to-gray-50 border-slate-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-blue-700 font-medium">יתרת בנק אחרונה</p>
-              <p className="text-2xl font-bold text-blue-900 mt-1">
+              <p className="text-sm text-slate-700 font-medium">יתרת בנק אחרונה</p>
+              <p className="text-2xl font-bold text-slate-900 mt-1">
                 {bankBalance !== null ? formatCurrency(bankBalance) : 'לא זמין'}
               </p>
-              <p className="text-xs text-blue-600 mt-2">מתנועות הבנק שיובאו</p>
+              <p className="text-xs text-slate-600 mt-2">מתנועות הבנק שיובאו</p>
             </div>
-            <div className="p-3 rounded-xl bg-blue-100">
-              <Building2 className="w-6 h-6 text-blue-600" />
+            <div className="p-3 rounded-xl bg-slate-100">
+              <Building2 className="w-6 h-6 text-slate-600" />
             </div>
           </div>
         </Card>
+      </div>
 
+      {/* שורה שלישית - התאמות בנק */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* תנועות מותאמות */}
         <Card padding="md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">תנועות מותאמות</p>
+              <p className="text-sm text-gray-500">תנועות בנק מותאמות</p>
               <p className="text-2xl font-bold text-success-600 mt-1">
                 {matchedTransactions}
               </p>
@@ -201,10 +308,9 @@ export function StatsCards({
         </Card>
       </div>
 
-      {/* שורה שלישית - הכנסות עתידיות ובאיחור */}
-      {(futureIncome > 0 || overdueIncome > 0) && (
+      {/* Legacy: הכנסות עתידיות ובאיחור - רק אם אין incomeBreakdown */}
+      {!incomeBreakdown && (futureIncome > 0 || overdueIncome > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* הכנסות עתידיות */}
           {futureIncome > 0 && (
             <Card padding="md" className="bg-gradient-to-br from-primary-50 to-indigo-50 border-primary-200">
               <div className="flex items-center justify-between">
@@ -224,7 +330,6 @@ export function StatsCards({
             </Card>
           )}
 
-          {/* הכנסות באיחור */}
           {overdueIncome > 0 && (
             <Card padding="md" className="bg-gradient-to-br from-danger-50 to-red-50 border-danger-300">
               <div className="flex items-center justify-between">

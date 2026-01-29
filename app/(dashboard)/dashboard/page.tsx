@@ -38,6 +38,17 @@ export default function DashboardPage() {
     overdueIncome: 0,
     futureCount: 0,
     overdueCount: 0,
+    // פירוט הכנסות חדש
+    incomeBreakdown: {
+      actualReceived: 0,
+      actualReceivedCount: 0,
+      issuedForVat: 0,
+      issuedForVatCount: 0,
+      expectedCollection: 0,
+      expectedCollectionCount: 0,
+      overdueAmount: 0,
+      overdueCount: 0,
+    },
   })
   const [chartData, setChartData] = useState<any[]>([])
   const [budgetStatus, setBudgetStatus] = useState<BudgetStatus[]>([])
@@ -119,10 +130,10 @@ export default function DashboardPage() {
         prevEndDate = '1999-12-31'
       }
 
-      // קבלת נתונים לתקופה הנבחרת
+      // קבלת נתונים לתקופה הנבחרת - כולל סוג מסמך וסטטוס תשלום
       const { data: periodIncome } = await supabase
         .from('income')
-        .select('amount, date, category_id')
+        .select('amount, date, category_id, document_type, payment_status, document_status, due_date')
         .eq('company_id', companyId)
         .gte('date', startDate)
         .lte('date', endDate)
@@ -195,6 +206,36 @@ export default function DashboardPage() {
       const futureIncome = futureIncomeData?.reduce((sum, i) => sum + Number(i.amount), 0) || 0
       const overdueIncome = overdueIncomeData?.reduce((sum, i) => sum + Number(i.amount), 0) || 0
 
+      // ========================================
+      // חישוב פירוט הכנסות לפי סוגי מסמכים
+      // ========================================
+      
+      // נכנס בפועל: קבלות + חשבוניות מס קבלה (ששולמו)
+      const actualReceivedDocs = periodIncome?.filter(i => 
+        i.document_type === 'receipt' || 
+        (i.document_type === 'tax_invoice_receipt' && i.payment_status === 'paid')
+      ) || []
+      const actualReceived = actualReceivedDocs.reduce((sum, i) => sum + Number(i.amount), 0)
+      
+      // הופק לדיווח מע"מ: חשבוניות מס + חשבוניות מס קבלה
+      const vatDocTypes = ['tax_invoice', 'tax_invoice_receipt']
+      const issuedForVatDocs = periodIncome?.filter(i => vatDocTypes.includes(i.document_type)) || []
+      const issuedForVat = issuedForVatDocs.reduce((sum, i) => sum + Number(i.amount), 0)
+      
+      // צפי גבייה: חשבוניות עסקה פתוחות + חשבוניות מס שלא שולמו
+      const expectedCollectionDocs = periodIncome?.filter(i => {
+        // חשבוניות עסקה פתוחות
+        if (i.document_type === 'invoice' && i.document_status === 'open') return true
+        // חשבוניות מס שלא שולמו
+        if (vatDocTypes.includes(i.document_type) && i.payment_status !== 'paid') return true
+        return false
+      }) || []
+      const expectedCollection = expectedCollectionDocs.reduce((sum, i) => sum + Number(i.amount), 0)
+      
+      // באיחור: מתוך צפי הגבייה - אלה שעבר תאריך היעד
+      const overdueDocs = expectedCollectionDocs.filter(i => i.due_date && i.due_date < today)
+      const overdueAmount = overdueDocs.reduce((sum, i) => sum + Number(i.amount), 0)
+
       setStats({
         totalIncome,
         totalExpenses,
@@ -207,6 +248,17 @@ export default function DashboardPage() {
         overdueIncome,
         futureCount: futureIncomeData?.length || 0,
         overdueCount: overdueIncomeData?.length || 0,
+        // פירוט הכנסות חדש
+        incomeBreakdown: {
+          actualReceived,
+          actualReceivedCount: actualReceivedDocs.length,
+          issuedForVat,
+          issuedForVatCount: issuedForVatDocs.length,
+          expectedCollection,
+          expectedCollectionCount: expectedCollectionDocs.length,
+          overdueAmount,
+          overdueCount: overdueDocs.length,
+        },
       })
 
       // פירוט לפי קטגוריה
@@ -429,6 +481,7 @@ export default function DashboardPage() {
         overdueIncome={stats.overdueIncome}
         futureCount={stats.futureCount}
         overdueCount={stats.overdueCount}
+        incomeBreakdown={stats.incomeBreakdown}
       />
 
       {/* Action Center - מרכז פעולות */}
