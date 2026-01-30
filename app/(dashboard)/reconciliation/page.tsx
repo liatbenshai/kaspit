@@ -72,6 +72,8 @@ export default function ReconciliationPage() {
     category_id: '',
     supplier_id: '',
     customer_id: '',
+    new_customer_name: '', // שם לקוח חדש
+    new_supplier_name: '', // שם ספק חדש
     description: '',
     invoice_number: '',
     payment_status: 'paid' as 'pending' | 'partial' | 'paid',
@@ -517,6 +519,7 @@ export default function ReconciliationPage() {
   }
 
   // יצירת הוצאה/הכנסה חדשה מתנועת בנק
+  // יצירת הוצאה/הכנסה חדשה מתנועת בנק
   const handleCreateFromTransaction = async (transaction: BankTransaction) => {
     if (!companyId) return
     setProcessing(true)
@@ -526,6 +529,28 @@ export default function ReconciliationPage() {
       const absAmount = Math.abs(transaction.amount)
       
       if (isCredit) {
+        // בדיקה אם צריך ליצור לקוח חדש
+        let customerId = createForm.customer_id || null
+        
+        if (!customerId && createForm.new_customer_name.trim()) {
+          // יצירת לקוח חדש
+          const { data: newCustomer, error: customerError } = await supabase
+            .from('customers')
+            .insert({
+              company_id: companyId,
+              name: createForm.new_customer_name.trim(),
+              is_active: true,
+            })
+            .select()
+            .single()
+          
+          if (customerError) throw customerError
+          customerId = newCustomer.id
+          
+          // עדכון רשימת הלקוחות
+          setCustomers(prev => [...prev, newCustomer])
+        }
+        
         // יצירת הכנסה
         const { data: newIncome, error } = await supabase
           .from('income')
@@ -535,7 +560,7 @@ export default function ReconciliationPage() {
             date: transaction.date,
             description: createForm.description || transaction.description,
             category_id: createForm.category_id || null,
-            customer_id: createForm.customer_id || null,
+            customer_id: customerId,
             invoice_number: createForm.invoice_number || null,
             payment_status: createForm.payment_status,
             bank_transaction_id: transaction.id,
@@ -555,8 +580,32 @@ export default function ReconciliationPage() {
           })
           .eq('id', transaction.id)
           
-        setSuccessMessage('הכנסה חדשה נוצרה והותאמה!')
+        setSuccessMessage(customerId && createForm.new_customer_name.trim() 
+          ? `הכנסה נוצרה + לקוח חדש "${createForm.new_customer_name}"!`
+          : 'הכנסה חדשה נוצרה והותאמה!')
       } else {
+        // בדיקה אם צריך ליצור ספק חדש
+        let supplierId = createForm.supplier_id || null
+        
+        if (!supplierId && createForm.new_supplier_name.trim()) {
+          // יצירת ספק חדש
+          const { data: newSupplier, error: supplierError } = await supabase
+            .from('suppliers')
+            .insert({
+              company_id: companyId,
+              name: createForm.new_supplier_name.trim(),
+              is_active: true,
+            })
+            .select()
+            .single()
+          
+          if (supplierError) throw supplierError
+          supplierId = newSupplier.id
+          
+          // עדכון רשימת הספקים
+          setSuppliers(prev => [...prev, newSupplier])
+        }
+        
         // יצירת הוצאה
         const { data: newExpense, error } = await supabase
           .from('expenses')
@@ -566,7 +615,7 @@ export default function ReconciliationPage() {
             date: transaction.date,
             description: createForm.description || transaction.description,
             category_id: createForm.category_id || null,
-            supplier_id: createForm.supplier_id || null,
+            supplier_id: supplierId,
             invoice_number: createForm.invoice_number || null,
             payment_status: createForm.payment_status,
             bank_transaction_id: transaction.id,
@@ -586,7 +635,9 @@ export default function ReconciliationPage() {
           })
           .eq('id', transaction.id)
           
-        setSuccessMessage('הוצאה חדשה נוצרה והותאמה!')
+        setSuccessMessage(supplierId && createForm.new_supplier_name.trim()
+          ? `הוצאה נוצרה + ספק חדש "${createForm.new_supplier_name}"!`
+          : 'הוצאה חדשה נוצרה והותאמה!')
       }
 
       closeModal()
@@ -709,16 +760,29 @@ export default function ReconciliationPage() {
       category_id: '',
       supplier_id: '',
       customer_id: '',
+      new_customer_name: '',
+      new_supplier_name: '',
       description: '',
       invoice_number: '',
       payment_status: 'paid',
     })
   }
 
-  // פתיחת מודאל התאמה
+  // פתיחת מודאל התאמה - עם מילוי אוטומטי של שם לקוח/ספק מתיאור התנועה
   const openMatchModal = (transaction: UnmatchedTransaction) => {
     setSelectedTransaction(transaction)
     setShowMatchModal(true)
+    
+    // ניסיון לחלץ שם מתיאור התנועה
+    const desc = transaction.description || ''
+    const isCredit = transaction.amount > 0
+    
+    // מילוי מקדים של שם לקוח/ספק חדש מתיאור התנועה
+    if (isCredit) {
+      setCreateForm(prev => ({ ...prev, new_customer_name: desc }))
+    } else {
+      setCreateForm(prev => ({ ...prev, new_supplier_name: desc }))
+    }
   }
 
   // ציון התאמה בצבעים
@@ -1131,41 +1195,88 @@ export default function ReconciliationPage() {
                     placeholder={selectedTransaction.description || 'תיאור...'}
                   />
                   
-                  <div className="grid grid-cols-2 gap-4">
-                    <Select
-                      label="קטגוריה"
-                      value={createForm.category_id}
-                      onChange={(e) => setCreateForm(prev => ({ ...prev, category_id: e.target.value }))}
-                      options={[
-                        { value: '', label: 'בחר קטגוריה' },
-                        ...categories
-                          .filter(c => selectedTransaction.amount >= 0 ? c.type === 'income' : c.type === 'expense')
-                          .map(c => ({ value: c.id, label: c.name }))
-                      ]}
-                    />
-                    
-                    {selectedTransaction.amount >= 0 ? (
+                  <Select
+                    label="קטגוריה"
+                    value={createForm.category_id}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, category_id: e.target.value }))}
+                    options={[
+                      { value: '', label: 'בחר קטגוריה' },
+                      ...categories
+                        .filter(c => selectedTransaction.amount >= 0 ? c.type === 'income' : c.type === 'expense')
+                        .map(c => ({ value: c.id, label: c.name }))
+                    ]}
+                  />
+                  
+                  {/* לקוח/ספק - בחירה קיימת או יצירת חדש */}
+                  {selectedTransaction.amount >= 0 ? (
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">לקוח</label>
                       <Select
-                        label="לקוח"
                         value={createForm.customer_id}
-                        onChange={(e) => setCreateForm(prev => ({ ...prev, customer_id: e.target.value }))}
+                        onChange={(e) => {
+                          setCreateForm(prev => ({ 
+                            ...prev, 
+                            customer_id: e.target.value,
+                            new_customer_name: e.target.value ? '' : prev.new_customer_name // אם בחרו קיים, מנקים את החדש
+                          }))
+                        }}
                         options={[
-                          { value: '', label: 'בחר לקוח (אופציונלי)' },
+                          { value: '', label: '-- בחר לקוח קיים או צור חדש למטה --' },
                           ...customers.map(c => ({ value: c.id, label: c.name }))
                         ]}
                       />
-                    ) : (
+                      {!createForm.customer_id && (
+                        <div className="relative">
+                          <Input
+                            label=""
+                            value={createForm.new_customer_name}
+                            onChange={(e) => setCreateForm(prev => ({ ...prev, new_customer_name: e.target.value }))}
+                            placeholder="או הקלד שם לקוח חדש..."
+                            className="pr-8"
+                          />
+                          {createForm.new_customer_name && (
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-green-600 text-xs font-medium bg-green-100 px-2 py-0.5 rounded">
+                              + חדש
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">ספק</label>
                       <Select
-                        label="ספק"
                         value={createForm.supplier_id}
-                        onChange={(e) => setCreateForm(prev => ({ ...prev, supplier_id: e.target.value }))}
+                        onChange={(e) => {
+                          setCreateForm(prev => ({ 
+                            ...prev, 
+                            supplier_id: e.target.value,
+                            new_supplier_name: e.target.value ? '' : prev.new_supplier_name
+                          }))
+                        }}
                         options={[
-                          { value: '', label: 'בחר ספק (אופציונלי)' },
+                          { value: '', label: '-- בחר ספק קיים או צור חדש למטה --' },
                           ...suppliers.map(s => ({ value: s.id, label: s.name }))
                         ]}
                       />
-                    )}
-                  </div>
+                      {!createForm.supplier_id && (
+                        <div className="relative">
+                          <Input
+                            label=""
+                            value={createForm.new_supplier_name}
+                            onChange={(e) => setCreateForm(prev => ({ ...prev, new_supplier_name: e.target.value }))}
+                            placeholder="או הקלד שם ספק חדש..."
+                            className="pr-8"
+                          />
+                          {createForm.new_supplier_name && (
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-green-600 text-xs font-medium bg-green-100 px-2 py-0.5 rounded">
+                              + חדש
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   
                   <Input
                     label="מספר חשבונית (אופציונלי)"
@@ -1180,7 +1291,11 @@ export default function ReconciliationPage() {
                     loading={processing}
                   >
                     <Plus className="w-4 h-4" />
-                    צור {selectedTransaction.amount >= 0 ? 'הכנסה' : 'הוצאה'} והתאם
+                    צור {selectedTransaction.amount >= 0 ? 'הכנסה' : 'הוצאה'} 
+                    {selectedTransaction.amount >= 0 
+                      ? (createForm.new_customer_name && !createForm.customer_id ? ' + לקוח חדש' : '')
+                      : (createForm.new_supplier_name && !createForm.supplier_id ? ' + ספק חדש' : '')
+                    }
                   </Button>
                 </div>
               )}

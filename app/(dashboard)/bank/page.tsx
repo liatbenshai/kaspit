@@ -180,8 +180,186 @@ export default function BankPage() {
 
     const { error } = await supabase.from('bank_transactions').insert(records)
     if (error) throw error
+    
+    // לאחר הייבוא - זיהוי אוטומטי של הכנסות וספקים
+    await autoMatchIncomeAndExpenses(batchId)
+    
     setSuccessMessage(`יובאו ${records.length} תנועות!` + (autoClassifiedCount > 0 ? ` (${autoClassifiedCount} סווגו אוטומטית)` : ''))
     loadData()
+  }
+
+  // ============================================
+  // זיהוי אוטומטי של הכנסות והוצאות מתנועות בנק
+  // ============================================
+  const autoMatchIncomeAndExpenses = async (batchId?: string) => {
+    if (!companyId) return
+    
+    // שליפת תנועות שלא הותאמו
+    let query = supabase
+      .from('bank_transactions')
+      .select('*')
+      .eq('company_id', companyId)
+      .is('matched_id', null)
+    
+    if (batchId) {
+      query = query.eq('import_batch_id', batchId)
+    }
+    
+    // רק תנועות "רגילות" שלא סווגו כמשהו מיוחד
+    query = query.or('transaction_type.is.null,transaction_type.eq.regular')
+    
+    const { data: unmatchedTransactions } = await query
+    if (!unmatchedTransactions || unmatchedTransactions.length === 0) return
+    
+    // שליפת לקוחות וספקים קיימים
+    const { data: existingCustomers } = await supabase
+      .from('customers')
+      .select('id, name')
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+    
+    const { data: existingSuppliers } = await supabase
+      .from('suppliers')
+      .select('id, name')
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+    
+    const customerMap = new Map((existingCustomers || []).map(c => [c.name.toLowerCase().trim(), c.id]))
+    const supplierMap = new Map((existingSuppliers || []).map(s => [s.name.toLowerCase().trim(), s.id]))
+    
+    // שליפת הכנסות והוצאות קיימות לבדיקת כפילויות
+    const { data: existingIncome } = await supabase
+      .from('income')
+      .select('amount, date, customer_id')
+      .eq('company_id', companyId)
+    
+    const { data: existingExpenses } = await supabase
+      .from('expenses')
+      .select('amount, date, supplier_id')
+      .eq('company_id', companyId)
+    
+    let createdIncomeCount = 0
+    let createdExpenseCount = 0
+    let createdCustomerCount = 0
+    let createdSupplierCount = 0
+    
+    for (const trans of unmatchedTransactions) {
+      const desc = (trans.description || '').trim()
+      if (!desc) continue
+      
+      const isCredit = trans.amount > 0
+      const absAmount = Math.abs(trans.amount)
+      
+      if (isCredit) {
+        // זיכוי = הכנסה מלקוח
+        // ניקוי שם הלקוח מתיאור
+        const customerName = cleanNameFromDescription(desc)
+        if (!customerName) continue
+        
+        // בדיקה אם הלקוח קיים
+        let customerId = customerMap.get(customerName.toLowerCase())
+        
+        // בדיקה אם כבר יש הכנסה כזו (למניעת כפילויות)
+        const existingMatch = existingIncome?.find(i => 
+          Math.abs(i.amount - absAmount) < 1 && 
+          i.date === trans.date &&
+          i.customer_id === customerId
+        )
+        if (existingMatch) continue
+        
+        // יצירת לקוח חדש אם לא קיים
+        if (!customerId) {
+          const { data: newCustomer, error: custError } = await supabase
+            .from('customers')
+            .insert({
+              company_id: companyId,
+              name: customerName,
+              is_active: true,
+            })
+            .select()
+            .single()
+          
+          if (custError) {
+            console.error('Error creating customer:', custError)
+            continue
+          }
+          customerId = newCustomer.id
+          customerMap.set(customerName.toLowerCase(), customerId)
+          createdCustomerCount++
+        }
+        
+        // יצירת הכנסה
+        const { data: newIncome, error: incomeError } = await supabase
+          .from('income')
+          .insert({
+            company_id: companyId,
+            amount: absAmount,
+            date: trans.date,
+            description: desc,
+            customer_id: customerId,
+            payment_status: 'paid',
+            document_type: 'receipt',
+            bank_transaction_id: trans.id,
+          })
+          .select()
+          .single()
+        
+        if (incomeError) {
+          console.error('Error creating income:', incomeError)
+          continue
+        }
+        
+        // עדכון תנועת הבנק
+        await supabase
+          .from('bank_transactions')
+          .update({
+            matched_type: 'income',
+            matched_id: newIncome.id,
+          })
+          .eq('id', trans.id)
+        
+        createdIncomeCount++
+      }
+      // הוצאות - נטפל רק בתנועות שכבר סווגו (לא regular)
+      // כי הוצאות "רגילות" דורשות אישור ידני
+    }
+    
+    // הודעה למשתמש
+    const messages = []
+    if (createdIncomeCount > 0) messages.push(`${createdIncomeCount} הכנסות`)
+    if (createdCustomerCount > 0) messages.push(`${createdCustomerCount} לקוחות חדשים`)
+    if (createdExpenseCount > 0) messages.push(`${createdExpenseCount} הוצאות`)
+    if (createdSupplierCount > 0) messages.push(`${createdSupplierCount} ספקים חדשים`)
+    
+    if (messages.length > 0) {
+      setSuccessMessage(`זוהו אוטומטית: ${messages.join(', ')}`)
+    }
+  }
+
+  // ניקוי שם לקוח/ספק מתיאור תנועת בנק
+  const cleanNameFromDescription = (desc: string): string => {
+    // הסרת מילים לא רלוונטיות
+    const removeWords = [
+      'העברה', 'העברת', 'מ-', 'ל-', 'בגין', 'עבור', 'תשלום', 'קבלה',
+      'זיכוי', 'חיוב', 'הפקדה', 'משיכה', 'צק', 'שיק', 'המחאה',
+      'מזומן', 'העב', 'אינטרנט', 'פעולה', 'ביט', 'bit', 'paybox'
+    ]
+    
+    let cleaned = desc
+    removeWords.forEach(word => {
+      cleaned = cleaned.replace(new RegExp(word, 'gi'), '')
+    })
+    
+    // הסרת מספרים ותווים מיוחדים מההתחלה והסוף
+    cleaned = cleaned.replace(/^[\d\s\-\.\/]+/, '').replace(/[\d\s\-\.\/]+$/, '')
+    cleaned = cleaned.trim()
+    
+    // אם נשאר משהו קצר מדי, נחזיר את המקורי
+    if (cleaned.length < 2) {
+      return desc.trim()
+    }
+    
+    return cleaned
   }
 
   const toggleSelectItem = (id: string) => {
@@ -318,7 +496,8 @@ export default function BankPage() {
     <div className="space-y-6">
       <PageHeader title="תנועות בנק" description="ייבוא, סיווג והתאמת תנועות"
         actions={<div className="flex gap-3">
-          <Button variant="outline" onClick={autoClassifyUnmatched}><Sparkles className="w-4 h-4" />סיווג אוטומטי</Button>
+          <Button variant="outline" onClick={() => autoMatchIncomeAndExpenses()}><Sparkles className="w-4 h-4" />זהה הכנסות</Button>
+          <Button variant="outline" onClick={autoClassifyUnmatched}><Tag className="w-4 h-4" />סיווג אוטומטי</Button>
           <Button variant="outline" onClick={() => setShowImportModal(true)}><Upload className="w-4 h-4" />ייבוא</Button>
         </div>} />
 
