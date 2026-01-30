@@ -6,7 +6,7 @@ import {
   TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight,
   Building2, CheckCircle, AlertCircle, CalendarClock, 
   Banknote, FileText, ArrowLeft, Users, Receipt, Landmark,
-  CreditCard, ChevronDown, ChevronUp
+  CreditCard, ChevronDown, ChevronUp, FileCheck, FileX
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
@@ -25,16 +25,30 @@ interface IncomeBreakdown {
 interface ExpensesBreakdown {
   operational: number
   operationalCount: number
+  operationalWithDoc: number
   salary: number
   salaryCount: number
+  salaryWithDoc: number
   taxes: number
   taxesCount: number
+  taxesWithDoc: number
   socialSecurity: number
   socialSecurityCount: number
+  socialSecurityWithDoc: number
   loans: number
   loansCount: number
+  loansWithDoc: number
   bankFees: number
   bankFeesCount: number
+  bankFeesWithDoc: number
+  creditCard: number
+  creditCardCount: number
+  creditCardWithDoc: number
+  internal: number
+  internalCount: number
+  internalWithDoc: number
+  totalWithDoc: number
+  totalCount: number
 }
 
 interface StatsCardsProps {
@@ -87,15 +101,21 @@ export function StatsCards({
   }
   const filterParams = getFilterParams()
 
-  // פריטי פירוט הוצאות להצגה
+  // פריטי פירוט הוצאות להצגה (לא כולל העברות פנימיות)
   const expenseItems = expensesBreakdown ? [
-    { key: 'operational', label: '🏢 תפעול', amount: expensesBreakdown.operational, count: expensesBreakdown.operationalCount, color: 'text-gray-600' },
-    { key: 'salary', label: '💰 משכורות', amount: expensesBreakdown.salary, count: expensesBreakdown.salaryCount, color: 'text-blue-600' },
-    { key: 'taxes', label: '📋 מסים', amount: expensesBreakdown.taxes, count: expensesBreakdown.taxesCount, color: 'text-purple-600' },
-    { key: 'socialSecurity', label: '🏛️ ביטוח לאומי', amount: expensesBreakdown.socialSecurity, count: expensesBreakdown.socialSecurityCount, color: 'text-indigo-600' },
-    { key: 'loans', label: '🏦 הלוואות', amount: expensesBreakdown.loans, count: expensesBreakdown.loansCount, color: 'text-amber-600' },
-    { key: 'bankFees', label: '💳 עמלות בנק', amount: expensesBreakdown.bankFees, count: expensesBreakdown.bankFeesCount, color: 'text-gray-500' },
+    { key: 'operational', label: '🏢 תפעול', amount: expensesBreakdown.operational, count: expensesBreakdown.operationalCount, withDoc: expensesBreakdown.operationalWithDoc, color: 'text-gray-700', needsDoc: true },
+    { key: 'salary', label: '💰 משכורות', amount: expensesBreakdown.salary, count: expensesBreakdown.salaryCount, withDoc: expensesBreakdown.salaryWithDoc, color: 'text-blue-600', needsDoc: false },
+    { key: 'taxes', label: '📋 מסים/מע״מ', amount: expensesBreakdown.taxes, count: expensesBreakdown.taxesCount, withDoc: expensesBreakdown.taxesWithDoc, color: 'text-purple-600', needsDoc: false },
+    { key: 'socialSecurity', label: '🏛️ ביטוח לאומי', amount: expensesBreakdown.socialSecurity, count: expensesBreakdown.socialSecurityCount, withDoc: expensesBreakdown.socialSecurityWithDoc, color: 'text-indigo-600', needsDoc: false },
+    { key: 'loans', label: '🏦 הלוואות', amount: expensesBreakdown.loans, count: expensesBreakdown.loansCount, withDoc: expensesBreakdown.loansWithDoc, color: 'text-amber-600', needsDoc: false },
+    { key: 'bankFees', label: '💳 עמלות בנק', amount: expensesBreakdown.bankFees, count: expensesBreakdown.bankFeesCount, withDoc: expensesBreakdown.bankFeesWithDoc, color: 'text-gray-500', needsDoc: false },
+    { key: 'creditCard', label: '💳 סליקת אשראי', amount: expensesBreakdown.creditCard, count: expensesBreakdown.creditCardCount, withDoc: expensesBreakdown.creditCardWithDoc, color: 'text-pink-600', needsDoc: true },
   ].filter(item => item.amount > 0) : []
+
+  // חישוב כמה הוצאות ללא מסמך תומך (רק לאלה שצריכים)
+  const missingDocs = expenseItems
+    .filter(item => item.needsDoc && item.count > item.withDoc)
+    .reduce((sum, item) => sum + (item.count - item.withDoc), 0)
 
   return (
     <div className="space-y-4">
@@ -185,47 +205,47 @@ export function StatsCards({
         </Link>
       )}
 
-      {/* שורה שנייה - הוצאות (עם פירוט), רווח, בנק */}
+      {/* שורה שנייה - הוצאות (מהבנק), רווח, יתרת בנק */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* הוצאות עם פירוט */}
+        {/* הוצאות */}
         <div className="relative">
-          <Link href={`/expenses${filterParams}`} className="group block">
-            <div className="relative overflow-hidden bg-gradient-to-br from-red-500 to-rose-600 rounded-2xl p-5 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-              <div className="absolute top-0 left-0 w-32 h-32 bg-white/10 rounded-full -translate-x-16 -translate-y-16" />
-              <div className="relative">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="bg-white/20 rounded-xl p-2">
-                    <TrendingDown className="w-5 h-5" />
-                  </div>
-                  <ArrowLeft className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div 
+            onClick={() => setShowExpenseDetails(!showExpenseDetails)}
+            className="cursor-pointer relative overflow-hidden bg-gradient-to-br from-red-500 to-rose-600 rounded-2xl p-5 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+          >
+            <div className="absolute top-0 left-0 w-32 h-32 bg-white/10 rounded-full -translate-x-16 -translate-y-16" />
+            <div className="relative">
+              <div className="flex items-center justify-between mb-3">
+                <div className="bg-white/20 rounded-xl p-2">
+                  <TrendingDown className="w-5 h-5" />
                 </div>
-                <p className="text-red-100 text-sm font-medium">💸 הוצאות {periodLabel}</p>
-                <p className="text-3xl font-bold mt-1">{formatCurrency(totalExpenses)}</p>
-                {prevExpenses > 0 && expensesChange !== 0 && (
-                  <div className="flex items-center gap-1 mt-2">
-                    <span className={cn(
-                      "inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full",
-                      expensesChange > 0 ? "bg-white/20 text-white" : "bg-green-400/30 text-green-100"
-                    )}>
-                      {expensesChange > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                      {Math.abs(expensesChange)}%
+                <div className="flex items-center gap-2">
+                  {missingDocs > 0 && (
+                    <span className="bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full">
+                      {missingDocs} ללא מסמך
                     </span>
-                  </div>
+                  )}
+                  {showExpenseDetails ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                </div>
+              </div>
+              <p className="text-red-100 text-sm font-medium">💸 הוצאות {periodLabel}</p>
+              <p className="text-3xl font-bold mt-1">{formatCurrency(totalExpenses)}</p>
+              <div className="flex items-center gap-2 mt-2">
+                {prevExpenses > 0 && expensesChange !== 0 && (
+                  <span className={cn(
+                    "inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full",
+                    expensesChange > 0 ? "bg-white/20 text-white" : "bg-green-400/30 text-green-100"
+                  )}>
+                    {expensesChange > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                    {Math.abs(expensesChange)}%
+                  </span>
                 )}
+                <span className="text-red-200 text-xs">
+                  {expensesBreakdown?.totalCount || 0} תנועות בנק
+                </span>
               </div>
             </div>
-          </Link>
-          
-          {/* כפתור פירוט */}
-          {expenseItems.length > 0 && (
-            <button 
-              onClick={() => setShowExpenseDetails(!showExpenseDetails)}
-              className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white shadow-lg rounded-full px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 flex items-center gap-1 border"
-            >
-              {showExpenseDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-              פירוט
-            </button>
-          )}
+          </div>
         </div>
 
         {/* רווח/הפסד */}
@@ -272,17 +292,44 @@ export function StatsCards({
       {/* פירוט הוצאות - מתרחב */}
       {showExpenseDetails && expenseItems.length > 0 && (
         <div className="bg-white rounded-2xl border-2 border-red-100 p-4 shadow-sm animate-in slide-in-from-top-2 duration-200">
-          <p className="text-sm font-medium text-gray-700 mb-3">📊 פירוט הוצאות {periodLabel}:</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium text-gray-700">📊 פירוט הוצאות מהבנק {periodLabel}:</p>
+            <span className="text-xs text-gray-500">
+              {expensesBreakdown?.totalWithDoc || 0}/{expensesBreakdown?.totalCount || 0} עם מסמך תומך
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {expenseItems.map(item => (
               <div key={item.key} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                 <div>
                   <p className="text-sm font-medium text-gray-600">{item.label}</p>
-                  <p className="text-xs text-gray-400">{item.count} רשומות</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs text-gray-400">{item.count} תנועות</span>
+                    {item.needsDoc && (
+                      <span className={cn(
+                        "text-xs flex items-center gap-1",
+                        item.withDoc === item.count ? "text-green-600" : "text-amber-600"
+                      )}>
+                        {item.withDoc === item.count ? (
+                          <><FileCheck className="w-3 h-3" /> תקין</>
+                        ) : (
+                          <><FileX className="w-3 h-3" /> {item.count - item.withDoc} חסר</>
+                        )}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <p className={cn("text-lg font-bold", item.color)}>{formatCurrency(item.amount)}</p>
               </div>
             ))}
+          </div>
+          
+          {/* הסבר */}
+          <div className="mt-3 p-2 bg-blue-50 rounded-lg">
+            <p className="text-xs text-blue-700">
+              💡 <strong>הוצאות מבוססות על תנועות הבנק</strong> - כל מה שירד מחשבון הבנק בתקופה. 
+              "מסמך תומך" = יש חשבונית/קבלה מקושרת להוצאה.
+            </p>
           </div>
         </div>
       )}
