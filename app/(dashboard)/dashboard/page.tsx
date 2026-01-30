@@ -9,7 +9,6 @@ import { Insights } from '@/components/dashboard/Insights'
 import { CashFlowForecast } from '@/components/dashboard/CashFlowForecast'
 import { ActionCenter } from '@/components/dashboard/ActionCenter'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
-import { Select } from '@/components/ui/Select'
 import { supabase } from '@/lib/supabase'
 import { generateInsights, analyzeBudgetStatus, calculateCashFlowForecast } from '@/lib/insights'
 import { formatCurrency, getMonthName, hebrewMonths } from '@/lib/utils'
@@ -436,59 +435,85 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={`דשבורד - ${viewMode === 'month' ? hebrewMonths[selectedMonth - 1] + ' ' + selectedYear : viewMode === 'year' ? selectedYear : 'כל הנתונים'}`}
-        description="סקירה כללית של המצב הפיננסי של העסק"
-        actions={
-          <div className="flex gap-3 items-center flex-wrap">
-            {/* כפתורי הוספה מהירה */}
-            <div className="flex gap-2">
-              <Link href="/income?action=add">
-                <Button size="sm" variant="outline" className="text-success-600 border-success-300 hover:bg-success-50">
-                  <Plus className="w-4 h-4" />
-                  הכנסה
-                </Button>
-              </Link>
-              <Link href="/expenses?action=add">
-                <Button size="sm" variant="outline" className="text-danger-600 border-danger-300 hover:bg-danger-50">
-                  <Plus className="w-4 h-4" />
-                  הוצאה
-                </Button>
-              </Link>
+      {/* Header מעוצב */}
+      <div className="bg-gradient-to-r from-primary-600 via-primary-500 to-indigo-500 rounded-2xl p-6 text-white shadow-lg">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">
+              {viewMode === 'month' 
+                ? `📊 ${hebrewMonths[selectedMonth - 1]} ${selectedYear}` 
+                : viewMode === 'year' 
+                ? `📊 שנת ${selectedYear}` 
+                : '📊 סיכום כללי'}
+            </h1>
+            <p className="text-primary-100 mt-1">סקירת המצב הפיננסי של העסק</p>
+          </div>
+          
+          {/* בחירת תקופה - הכל בשורה */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex bg-white/10 rounded-lg p-1">
+              <button 
+                onClick={() => setViewMode('month')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'month' ? 'bg-white text-primary-600' : 'text-white hover:bg-white/10'}`}
+              >
+                חודש
+              </button>
+              <button 
+                onClick={() => setViewMode('year')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'year' ? 'bg-white text-primary-600' : 'text-white hover:bg-white/10'}`}
+              >
+                שנה
+              </button>
+              <button 
+                onClick={() => setViewMode('all')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'all' ? 'bg-white text-primary-600' : 'text-white hover:bg-white/10'}`}
+              >
+                הכל
+              </button>
             </div>
             
-            <div className="h-6 w-px bg-gray-300" />
-            
-            {/* בחירת תקופה */}
-            <Select
-              value={viewMode}
-              onChange={(e) => setViewMode(e.target.value as any)}
-              options={[
-                { value: 'month', label: '🗓️ חודש' },
-                { value: 'year', label: '📅 שנה' },
-                { value: 'all', label: '📊 הכל' },
-              ]}
-              className="w-28"
-            />
             {viewMode !== 'all' && (
-              <Select
-                value={selectedYear.toString()}
+              <select
+                value={selectedYear}
                 onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                options={availableYears.map(y => ({ value: y.toString(), label: y.toString() }))}
-                className="w-24"
-              />
+                className="bg-white/10 border-0 text-white rounded-lg px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-white/50"
+              >
+                {availableYears.map(y => (
+                  <option key={y} value={y} className="text-gray-900">{y}</option>
+                ))}
+              </select>
             )}
+            
             {viewMode === 'month' && (
-              <Select
-                value={selectedMonth.toString()}
+              <select
+                value={selectedMonth}
                 onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                options={hebrewMonths.map((m, i) => ({ value: (i + 1).toString(), label: m }))}
-                className="w-28"
-              />
+                className="bg-white/10 border-0 text-white rounded-lg px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-white/50"
+              >
+                {hebrewMonths.map((m, i) => (
+                  <option key={i} value={i + 1} className="text-gray-900">{m}</option>
+                ))}
+              </select>
             )}
+            
+            <div className="h-6 w-px bg-white/30 mx-2" />
+            
+            {/* כפתורי הוספה מהירה */}
+            <Link href="/income?action=add">
+              <button className="flex items-center gap-1 bg-emerald-500 hover:bg-emerald-400 text-white px-3 py-2 rounded-lg text-sm font-medium transition-all shadow-md hover:shadow-lg">
+                <Plus className="w-4 h-4" />
+                הכנסה
+              </button>
+            </Link>
+            <Link href="/expenses?action=add">
+              <button className="flex items-center gap-1 bg-rose-500 hover:bg-rose-400 text-white px-3 py-2 rounded-lg text-sm font-medium transition-all shadow-md hover:shadow-lg">
+                <Plus className="w-4 h-4" />
+                הוצאה
+              </button>
+            </Link>
           </div>
-        }
-      />
+        </div>
+      </div>
 
       {/* Stats Cards */}
       <StatsCards
@@ -504,6 +529,8 @@ export default function DashboardPage() {
             ? `ב-${selectedYear}` 
             : ''
         }
+        selectedMonth={viewMode === 'month' ? selectedMonth : undefined}
+        selectedYear={viewMode !== 'all' ? selectedYear : undefined}
         matchedTransactions={stats.matchedTransactions}
         unmatchedTransactions={stats.unmatchedTransactions}
         futureIncome={stats.futureIncome}
