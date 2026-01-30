@@ -39,7 +39,7 @@ export default function DashboardPage() {
     overdueIncome: 0,
     futureCount: 0,
     overdueCount: 0,
-    // פירוט הכנסות חדש
+    // פירוט הכנסות
     incomeBreakdown: {
       actualReceived: 0,
       actualReceivedCount: 0,
@@ -49,6 +49,21 @@ export default function DashboardPage() {
       expectedCollectionCount: 0,
       overdueAmount: 0,
       overdueCount: 0,
+    },
+    // פירוט הוצאות
+    expensesBreakdown: {
+      operational: 0,
+      operationalCount: 0,
+      salary: 0,
+      salaryCount: 0,
+      taxes: 0,
+      taxesCount: 0,
+      socialSecurity: 0,
+      socialSecurityCount: 0,
+      loans: 0,
+      loansCount: 0,
+      bankFees: 0,
+      bankFeesCount: 0,
     },
   })
   const [chartData, setChartData] = useState<any[]>([])
@@ -144,7 +159,7 @@ export default function DashboardPage() {
 
       const { data: periodExpenses } = await supabase
         .from('expenses')
-        .select('amount, date, category_id, category:categories(name, color)')
+        .select('amount, date, category_id, description, document_type, category:categories(name, color)')
         .eq('company_id', companyId)
         .gte('date', startDate)
         .lte('date', endDate)
@@ -245,6 +260,76 @@ export default function DashboardPage() {
       ) || []
       const overdueAmount = overdueDocs.reduce((sum, i) => sum + Number(i.amount), 0)
 
+      // ========================================
+      // חישוב פירוט הוצאות לפי קטגוריות
+      // ========================================
+      
+      // קטגוריות מיוחדות לזיהוי
+      const salaryKeywords = ['משכורת', 'שכר', 'salary']
+      const taxKeywords = ['מע"מ', 'מע״מ', 'vat', 'מס הכנסה', 'מקדמ', 'tax']
+      const socialSecurityKeywords = ['ביטוח לאומי', 'בל"ל', 'בטל']
+      const loanKeywords = ['הלוואה', 'loan', 'החזר']
+      const bankFeeKeywords = ['עמלת', 'עמלה', 'bank fee']
+      
+      const isCategoryMatch = (categoryName: string | undefined, description: string | undefined, keywords: string[]) => {
+        const catLower = (categoryName || '').toLowerCase()
+        const descLower = (description || '').toLowerCase()
+        return keywords.some(kw => catLower.includes(kw) || descLower.includes(kw))
+      }
+      
+      // סיווג הוצאות
+      const salaryExpenses = periodExpenses?.filter(e => 
+        isCategoryMatch((e.category as any)?.name, e.description, salaryKeywords)
+      ) || []
+      
+      const taxExpenses = periodExpenses?.filter(e => 
+        isCategoryMatch((e.category as any)?.name, e.description, taxKeywords)
+      ) || []
+      
+      const socialSecurityExpenses = periodExpenses?.filter(e => 
+        isCategoryMatch((e.category as any)?.name, e.description, socialSecurityKeywords)
+      ) || []
+      
+      const loanExpenses = periodExpenses?.filter(e => 
+        isCategoryMatch((e.category as any)?.name, e.description, loanKeywords)
+      ) || []
+      
+      const bankFeeExpenses = periodExpenses?.filter(e => 
+        isCategoryMatch((e.category as any)?.name, e.description, bankFeeKeywords)
+      ) || []
+      
+      // הוצאות תפעול - כל השאר
+      const specialExpenseIds = new Set([
+        ...salaryExpenses.map(e => e.category_id),
+        ...taxExpenses.map(e => e.category_id),
+        ...socialSecurityExpenses.map(e => e.category_id),
+        ...loanExpenses.map(e => e.category_id),
+        ...bankFeeExpenses.map(e => e.category_id),
+      ].filter(Boolean))
+      
+      const operationalExpenses = periodExpenses?.filter(e => {
+        // אם אין קטגוריה מיוחדת
+        return !isCategoryMatch((e.category as any)?.name, e.description, [
+          ...salaryKeywords, ...taxKeywords, ...socialSecurityKeywords, 
+          ...loanKeywords, ...bankFeeKeywords
+        ])
+      }) || []
+      
+      const expensesBreakdown = {
+        operational: operationalExpenses.reduce((sum, e) => sum + Number(e.amount), 0),
+        operationalCount: operationalExpenses.length,
+        salary: salaryExpenses.reduce((sum, e) => sum + Number(e.amount), 0),
+        salaryCount: salaryExpenses.length,
+        taxes: taxExpenses.reduce((sum, e) => sum + Number(e.amount), 0),
+        taxesCount: taxExpenses.length,
+        socialSecurity: socialSecurityExpenses.reduce((sum, e) => sum + Number(e.amount), 0),
+        socialSecurityCount: socialSecurityExpenses.length,
+        loans: loanExpenses.reduce((sum, e) => sum + Number(e.amount), 0),
+        loansCount: loanExpenses.length,
+        bankFees: bankFeeExpenses.reduce((sum, e) => sum + Number(e.amount), 0),
+        bankFeesCount: bankFeeExpenses.length,
+      }
+
       setStats({
         totalIncome,
         totalExpenses,
@@ -257,7 +342,7 @@ export default function DashboardPage() {
         overdueIncome,
         futureCount: futureIncomeData?.length || 0,
         overdueCount: overdueIncomeData?.length || 0,
-        // פירוט הכנסות חדש
+        // פירוט הכנסות
         incomeBreakdown: {
           actualReceived,
           actualReceivedCount: actualReceivedDocs.length,
@@ -268,6 +353,8 @@ export default function DashboardPage() {
           overdueAmount,
           overdueCount: overdueDocs.length,
         },
+        // פירוט הוצאות
+        expensesBreakdown,
       })
 
       // פירוט לפי קטגוריה
@@ -538,6 +625,7 @@ export default function DashboardPage() {
         futureCount={stats.futureCount}
         overdueCount={stats.overdueCount}
         incomeBreakdown={stats.incomeBreakdown}
+        expensesBreakdown={stats.expensesBreakdown}
       />
 
       {/* Action Center - מרכז פעולות */}
