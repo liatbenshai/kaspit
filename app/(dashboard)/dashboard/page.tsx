@@ -227,7 +227,8 @@ export default function DashboardPage() {
       // DEBUG - לבדיקה
       console.log('=== DEBUG INCOME BREAKDOWN ===')
       console.log('Total period income records:', periodIncome?.length)
-      console.log('Document types in data:', [...new Set(periodIncome?.map(i => i.document_type))])
+      const docTypes = periodIncome?.map(i => i.document_type).filter((v, i, a) => a.indexOf(v) === i)
+      console.log('Document types in data:', docTypes)
       console.log('tax_invoice count:', periodIncome?.filter(i => i.document_type === 'tax_invoice').length)
       console.log('tax_invoice_receipt count:', periodIncome?.filter(i => i.document_type === 'tax_invoice_receipt').length)
       console.log('issuedForVatDocs count:', issuedForVatDocs.length)
