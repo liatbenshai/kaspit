@@ -226,6 +226,7 @@ export default function DashboardPage() {
       
       // DEBUG - לבדיקה
       console.log('=== DEBUG INCOME BREAKDOWN ===')
+      console.log('Date range:', startDate, 'to', endDate)
       console.log('Total period income records:', periodIncome?.length)
       const docTypes = periodIncome?.map(i => i.document_type).filter((v, i, a) => a.indexOf(v) === i)
       console.log('Document types in data:', docTypes)
