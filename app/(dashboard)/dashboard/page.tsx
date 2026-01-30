@@ -112,11 +112,14 @@ export default function DashboardPage() {
       
       if (viewMode === 'month') {
         startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
-        endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0]
+        // תיקון באג timezone - לא להשתמש ב-toISOString
+        const lastDayOfMonth = new Date(selectedYear, selectedMonth, 0).getDate()
+        endDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDayOfMonth).padStart(2, '0')}`
         const prevMonth = selectedMonth === 1 ? 12 : selectedMonth - 1
         const prevYear = selectedMonth === 1 ? selectedYear - 1 : selectedYear
         prevStartDate = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`
-        prevEndDate = new Date(prevYear, prevMonth, 0).toISOString().split('T')[0]
+        const lastDayOfPrevMonth = new Date(prevYear, prevMonth, 0).getDate()
+        prevEndDate = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(lastDayOfPrevMonth).padStart(2, '0')}`
       } else if (viewMode === 'year') {
         startDate = `${selectedYear}-01-01`
         endDate = `${selectedYear}-12-31`
@@ -223,17 +226,6 @@ export default function DashboardPage() {
       const vatDocTypes = ['tax_invoice', 'tax_invoice_receipt']
       const issuedForVatDocs = periodIncome?.filter(i => vatDocTypes.includes(i.document_type)) || []
       const issuedForVat = issuedForVatDocs.reduce((sum, i) => sum + Number(i.amount), 0)
-      
-      // DEBUG - לבדיקה
-      console.log('=== DEBUG INCOME BREAKDOWN ===')
-      console.log('Date range:', startDate, 'to', endDate)
-      console.log('Total period income records:', periodIncome?.length)
-      const docTypes = periodIncome?.map(i => i.document_type).filter((v, i, a) => a.indexOf(v) === i)
-      console.log('Document types in data:', docTypes)
-      console.log('tax_invoice count:', periodIncome?.filter(i => i.document_type === 'tax_invoice').length)
-      console.log('tax_invoice_receipt count:', periodIncome?.filter(i => i.document_type === 'tax_invoice_receipt').length)
-      console.log('issuedForVatDocs count:', issuedForVatDocs.length)
-      console.log('issuedForVat total:', issuedForVat)
       
       // תשלומים עתידיים: חשבוניות עסקה + חשבוניות מס
       // (הכסף מתועד בקבלה נפרדת, לא בחשבונית עצמה)
