@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -48,6 +49,7 @@ const paymentMethods = [
 ]
 
 export default function ExpensesPage() {
+  const searchParams = useSearchParams()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -99,6 +101,13 @@ export default function ExpensesPage() {
   })
 
   const [inputMode, setInputMode] = useState<'before_vat' | 'total'>('before_vat')
+
+  // פתיחת מודל הוספה מ-URL parameter
+  useEffect(() => {
+    if (searchParams.get('action') === 'add') {
+      setShowAddModal(true)
+    }
+  }, [searchParams])
 
   useEffect(() => {
     loadData()

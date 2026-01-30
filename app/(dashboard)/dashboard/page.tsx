@@ -13,7 +13,9 @@ import { Select } from '@/components/ui/Select'
 import { supabase } from '@/lib/supabase'
 import { generateInsights, analyzeBudgetStatus, calculateCashFlowForecast } from '@/lib/insights'
 import { formatCurrency, getMonthName, hebrewMonths } from '@/lib/utils'
-import { TrendingUp, TrendingDown, PieChart, Calendar } from 'lucide-react'
+import { TrendingUp, TrendingDown, PieChart, Calendar, Plus, Receipt, CreditCard } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
+import Link from 'next/link'
 import type { Insight, BudgetStatus } from '@/lib/insights'
 
 export default function DashboardPage() {
@@ -24,7 +26,7 @@ export default function DashboardPage() {
   const currentDate = new Date()
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear())
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1)
-  const [viewMode, setViewMode] = useState<'month' | 'year' | 'all'>('all')
+  const [viewMode, setViewMode] = useState<'month' | 'year' | 'all'>('month')
   
   const [stats, setStats] = useState({
     totalIncome: 0,
@@ -435,19 +437,38 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="דשבורד"
+        title={`דשבורד - ${viewMode === 'month' ? hebrewMonths[selectedMonth - 1] + ' ' + selectedYear : viewMode === 'year' ? selectedYear : 'כל הנתונים'}`}
         description="סקירה כללית של המצב הפיננסי של העסק"
         actions={
-          <div className="flex gap-3 items-center">
+          <div className="flex gap-3 items-center flex-wrap">
+            {/* כפתורי הוספה מהירה */}
+            <div className="flex gap-2">
+              <Link href="/income?action=add">
+                <Button size="sm" variant="outline" className="text-success-600 border-success-300 hover:bg-success-50">
+                  <Plus className="w-4 h-4" />
+                  הכנסה
+                </Button>
+              </Link>
+              <Link href="/expenses?action=add">
+                <Button size="sm" variant="outline" className="text-danger-600 border-danger-300 hover:bg-danger-50">
+                  <Plus className="w-4 h-4" />
+                  הוצאה
+                </Button>
+              </Link>
+            </div>
+            
+            <div className="h-6 w-px bg-gray-300" />
+            
+            {/* בחירת תקופה */}
             <Select
               value={viewMode}
               onChange={(e) => setViewMode(e.target.value as any)}
               options={[
-                { value: 'all', label: '📊 כל הנתונים' },
-                { value: 'year', label: '📅 לפי שנה' },
-                { value: 'month', label: '🗓️ לפי חודש' },
+                { value: 'month', label: '🗓️ חודש' },
+                { value: 'year', label: '📅 שנה' },
+                { value: 'all', label: '📊 הכל' },
               ]}
-              className="w-36"
+              className="w-28"
             />
             {viewMode !== 'all' && (
               <Select

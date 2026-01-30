@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -160,6 +161,7 @@ const getRelevantBusinessInvoices = (taxDocument: Income, allIncome: Income[]) =
 }
 
 export default function IncomePage() {
+  const searchParams = useSearchParams()
   const [income, setIncome] = useState<Income[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -195,6 +197,13 @@ export default function IncomePage() {
     description: '', invoice_number: '', payment_status: 'pending' as 'pending' | 'partial' | 'paid',
     payment_date: '', payment_method: '' as PaymentMethod,
   })
+
+  // פתיחת מודל הוספה מ-URL parameter
+  useEffect(() => {
+    if (searchParams.get('action') === 'add') {
+      setShowAddModal(true)
+    }
+  }, [searchParams])
 
   useEffect(() => { loadData() }, [])
 
