@@ -109,6 +109,43 @@ export default function RecurringExpensesPage() {
 
   useEffect(() => { loadData() }, [])
 
+  // יצירה אוטומטית של הוצאות חוזרות כשהדף נטען
+  useEffect(() => {
+    if (items.length > 0 && companyId && !generating) {
+      autoGenerateExpenses()
+    }
+  }, [items.length, companyId])
+
+  const autoGenerateExpenses = async () => {
+    if (!companyId || generating) return
+    
+    const today = new Date()
+    let hasItemsToGenerate = false
+    
+    // בדיקה אם יש הוצאות שצריך ליצור
+    for (const item of items.filter(i => i.is_active)) {
+      const startDate = new Date(item.start_date)
+      const endDate = item.end_date ? new Date(item.end_date) : null
+      
+      if (startDate > today) continue
+      if (endDate && endDate < today) continue
+      
+      if (item.frequency === 'monthly') {
+        if (!item.last_generated_date || 
+            new Date(item.last_generated_date).getMonth() !== today.getMonth() ||
+            new Date(item.last_generated_date).getFullYear() !== today.getFullYear()) {
+          hasItemsToGenerate = true
+          break
+        }
+      }
+    }
+    
+    // אם יש מה ליצור - יוצרים אוטומטית
+    if (hasItemsToGenerate) {
+      await generateExpenses()
+    }
+  }
+
   const loadData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
