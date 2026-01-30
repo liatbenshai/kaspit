@@ -7,6 +7,8 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Alert } from '@/components/ui/Alert'
 import { Modal } from '@/components/ui/Modal'
+import { Input } from '@/components/ui/Input'
+import { Select } from '@/components/ui/Select'
 import { supabase } from '@/lib/supabase'
 import { formatCurrency, formatDateShort, cn } from '@/lib/utils'
 import { 
@@ -20,9 +22,15 @@ import {
   AlertCircle,
   Check,
   X,
-  RefreshCw
+  RefreshCw,
+  Plus,
+  ArrowRight,
+  Banknote,
+  CreditCard,
+  Users,
+  FileText
 } from 'lucide-react'
-import type { BankTransaction, Income, Expense } from '@/types'
+import type { BankTransaction, Income, Expense, Category, Supplier, Customer } from '@/types'
 
 interface MatchSuggestion {
   type: 'income' | 'expense'
@@ -46,10 +54,43 @@ export default function ReconciliationPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [manualSearch, setManualSearch] = useState('')
   const [showAllItems, setShowAllItems] = useState(false)
+  
+  // טאב פעיל במודאל: 'suggestions' | 'search' | 'create' | 'classify'
+  const [activeTab, setActiveTab] = useState<'suggestions' | 'search' | 'create' | 'classify'>('suggestions')
 
   // נתונים להתאמה
   const [incomeList, setIncomeList] = useState<Income[]>([])
   const [expenseList, setExpenseList] = useState<Expense[]>([])
+  
+  // נתונים ליצירה
+  const [categories, setCategories] = useState<Category[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
+  
+  // טופס יצירת הוצאה/הכנסה חדשה
+  const [createForm, setCreateForm] = useState({
+    category_id: '',
+    supplier_id: '',
+    customer_id: '',
+    description: '',
+    invoice_number: '',
+    payment_status: 'paid' as 'pending' | 'partial' | 'paid',
+  })
+  
+  // סיווג תנועות מיוחדות
+  const transactionTypes = [
+    { value: 'salary', label: '💰 משכורת', icon: Users },
+    { value: 'vat_payment', label: '📋 תשלום מע״מ', icon: FileText },
+    { value: 'tax_payment', label: '📋 מקדמת מס הכנסה', icon: FileText },
+    { value: 'social_security', label: '🏛️ ביטוח לאומי', icon: Building2 },
+    { value: 'loan_payment', label: '🏦 החזר הלוואה', icon: Banknote },
+    { value: 'owner_withdrawal', label: '👤 משיכת בעלים', icon: Users },
+    { value: 'owner_deposit', label: '👤 הפקדת בעלים', icon: Users },
+    { value: 'internal_transfer', label: '🔄 העברה פנימית', icon: ArrowLeftRight },
+    { value: 'credit_card', label: '💳 סליקת אשראי', icon: CreditCard },
+    { value: 'bank_fee', label: '🏦 עמלת בנק', icon: Building2 },
+    { value: 'other', label: '📁 אחר', icon: FileText },
+  ]
 
   useEffect(() => {
     loadData()
@@ -104,6 +145,32 @@ export default function ReconciliationPage() {
 
       setIncomeList(incomeData || [])
       setExpenseList(expenseData || [])
+      
+      // טעינת קטגוריות, ספקים ולקוחות
+      const { data: categoriesData } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('company_id', profile.company_id)
+        .eq('is_active', true)
+        .order('name')
+      
+      const { data: suppliersData } = await supabase
+        .from('suppliers')
+        .select('*')
+        .eq('company_id', profile.company_id)
+        .eq('is_active', true)
+        .order('name')
+      
+      const { data: customersData } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('company_id', profile.company_id)
+        .eq('is_active', true)
+        .order('name')
+      
+      setCategories(categoriesData || [])
+      setSuppliers(suppliersData || [])
+      setCustomers(customersData || [])
 
       // חישוב הצעות התאמה לכל תנועה
       const transactionsWithSuggestions = (bankData || []).map(transaction => ({
@@ -449,6 +516,205 @@ export default function ReconciliationPage() {
     )
   }
 
+  // יצירת הוצאה/הכנסה חדשה מתנועת בנק
+  const handleCreateFromTransaction = async (transaction: BankTransaction) => {
+    if (!companyId) return
+    setProcessing(true)
+
+    try {
+      const isCredit = transaction.amount > 0
+      const absAmount = Math.abs(transaction.amount)
+      
+      if (isCredit) {
+        // יצירת הכנסה
+        const { data: newIncome, error } = await supabase
+          .from('income')
+          .insert({
+            company_id: companyId,
+            amount: absAmount,
+            date: transaction.date,
+            description: createForm.description || transaction.description,
+            category_id: createForm.category_id || null,
+            customer_id: createForm.customer_id || null,
+            invoice_number: createForm.invoice_number || null,
+            payment_status: createForm.payment_status,
+            bank_transaction_id: transaction.id,
+            document_type: 'receipt',
+          })
+          .select()
+          .single()
+
+        if (error) throw error
+
+        // עדכון תנועת הבנק
+        await supabase
+          .from('bank_transactions')
+          .update({
+            matched_type: 'income',
+            matched_id: newIncome.id,
+          })
+          .eq('id', transaction.id)
+          
+        setSuccessMessage('הכנסה חדשה נוצרה והותאמה!')
+      } else {
+        // יצירת הוצאה
+        const { data: newExpense, error } = await supabase
+          .from('expenses')
+          .insert({
+            company_id: companyId,
+            amount: absAmount,
+            date: transaction.date,
+            description: createForm.description || transaction.description,
+            category_id: createForm.category_id || null,
+            supplier_id: createForm.supplier_id || null,
+            invoice_number: createForm.invoice_number || null,
+            payment_status: createForm.payment_status,
+            bank_transaction_id: transaction.id,
+            document_type: 'invoice',
+          })
+          .select()
+          .single()
+
+        if (error) throw error
+
+        // עדכון תנועת הבנק
+        await supabase
+          .from('bank_transactions')
+          .update({
+            matched_type: 'expense',
+            matched_id: newExpense.id,
+          })
+          .eq('id', transaction.id)
+          
+        setSuccessMessage('הוצאה חדשה נוצרה והותאמה!')
+      }
+
+      closeModal()
+      loadData()
+      setTimeout(() => setSuccessMessage(null), 3000)
+    } catch (error) {
+      console.error('Error creating from transaction:', error)
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  // סיווג תנועה כסוג מיוחד (משכורת, מע"מ, וכו')
+  const handleClassifyTransaction = async (transaction: BankTransaction, transactionType: string) => {
+    if (!companyId) return
+    setProcessing(true)
+
+    try {
+      const absAmount = Math.abs(transaction.amount)
+      const isCredit = transaction.amount > 0
+      
+      // מציאת או יצירת קטגוריה מתאימה
+      let categoryId: string | null = null
+      const categoryMap: Record<string, string> = {
+        'salary': 'משכורות',
+        'vat_payment': 'מע״מ',
+        'tax_payment': 'מסים',
+        'social_security': 'ביטוח לאומי',
+        'loan_payment': 'הלוואות',
+        'bank_fee': 'עמלות בנק',
+      }
+      
+      if (categoryMap[transactionType]) {
+        // חיפוש קטגוריה קיימת
+        const categoryName = categoryMap[transactionType]
+        const existingCategory = categories.find(c => 
+          c.name.includes(categoryName) || categoryName.includes(c.name)
+        )
+        
+        if (existingCategory) {
+          categoryId = existingCategory.id
+        } else {
+          // יצירת קטגוריה חדשה
+          const { data: newCategory } = await supabase
+            .from('categories')
+            .insert({
+              company_id: companyId,
+              name: categoryName,
+              type: 'expense',
+              is_active: true,
+            })
+            .select()
+            .single()
+          
+          if (newCategory) {
+            categoryId = newCategory.id
+            setCategories(prev => [...prev, newCategory])
+          }
+        }
+      }
+      
+      // עדכון סוג התנועה בבנק
+      await supabase
+        .from('bank_transactions')
+        .update({
+          transaction_type: transactionType,
+        })
+        .eq('id', transaction.id)
+      
+      // אם זו לא העברה פנימית - יוצרים הוצאה/הכנסה
+      if (!['internal_transfer', 'owner_withdrawal', 'owner_deposit', 'credit_card'].includes(transactionType)) {
+        if (!isCredit) {
+          // יצירת הוצאה
+          const { data: newExpense } = await supabase
+            .from('expenses')
+            .insert({
+              company_id: companyId,
+              amount: absAmount,
+              date: transaction.date,
+              description: `${transactionTypes.find(t => t.value === transactionType)?.label || transactionType} - ${transaction.description || ''}`,
+              category_id: categoryId,
+              payment_status: 'paid',
+              bank_transaction_id: transaction.id,
+              document_type: 'other',
+            })
+            .select()
+            .single()
+
+          if (newExpense) {
+            await supabase
+              .from('bank_transactions')
+              .update({
+                matched_type: 'expense',
+                matched_id: newExpense.id,
+              })
+              .eq('id', transaction.id)
+          }
+        }
+      }
+
+      setSuccessMessage(`התנועה סווגה כ"${transactionTypes.find(t => t.value === transactionType)?.label}"`)
+      closeModal()
+      loadData()
+      setTimeout(() => setSuccessMessage(null), 3000)
+    } catch (error) {
+      console.error('Error classifying transaction:', error)
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  // סגירת מודאל ואיפוס
+  const closeModal = () => {
+    setShowMatchModal(false)
+    setSelectedTransaction(null)
+    setManualSearch('')
+    setShowAllItems(false)
+    setActiveTab('suggestions')
+    setCreateForm({
+      category_id: '',
+      supplier_id: '',
+      customer_id: '',
+      description: '',
+      invoice_number: '',
+      payment_status: 'paid',
+    })
+  }
+
   // פתיחת מודאל התאמה
   const openMatchModal = (transaction: UnmatchedTransaction) => {
     setSelectedTransaction(transaction)
@@ -640,197 +906,320 @@ export default function ReconciliationPage() {
       {/* מודאל התאמה */}
       <Modal
         isOpen={showMatchModal}
-        onClose={() => {
-          setShowMatchModal(false)
-          setSelectedTransaction(null)
-          setManualSearch('')
-          setShowAllItems(false)
-        }}
-        title="בחירת התאמה"
+        onClose={closeModal}
+        title="התאמת תנועה"
         size="xl"
       >
         {selectedTransaction && (
           <div className="space-y-4">
             {/* פרטי תנועת הבנק */}
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-sm text-blue-700 font-medium mb-2">תנועת בנק:</p>
+            <div className={cn(
+              "p-4 rounded-lg border",
+              selectedTransaction.amount >= 0 
+                ? "bg-green-50 border-green-200" 
+                : "bg-red-50 border-red-200"
+            )}>
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-bold text-blue-900">{selectedTransaction.description || 'ללא תיאור'}</p>
-                  <p className="text-sm text-blue-600">{formatDateShort(selectedTransaction.date)}</p>
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "p-2 rounded-lg",
+                    selectedTransaction.amount >= 0 ? "bg-green-100" : "bg-red-100"
+                  )}>
+                    {selectedTransaction.amount >= 0 
+                      ? <TrendingUp className="w-5 h-5 text-green-600" />
+                      : <TrendingDown className="w-5 h-5 text-red-600" />
+                    }
+                  </div>
+                  <div>
+                    <p className="font-bold text-gray-900">{selectedTransaction.description || 'ללא תיאור'}</p>
+                    <p className="text-sm text-gray-500">{formatDateShort(selectedTransaction.date)}</p>
+                  </div>
                 </div>
                 <span className={cn(
-                  'text-xl font-bold',
-                  selectedTransaction.amount >= 0 ? 'text-success-600' : 'text-danger-600'
+                  'text-2xl font-bold',
+                  selectedTransaction.amount >= 0 ? 'text-green-600' : 'text-red-600'
                 )}>
                   {formatCurrency(selectedTransaction.amount)}
                 </span>
               </div>
             </div>
 
-            {/* טאבים - הצעות אוטומטיות / חיפוש ידני */}
-            <div className="flex gap-2 border-b">
+            {/* 4 טאבים */}
+            <div className="flex gap-1 border-b overflow-x-auto">
               <button
-                onClick={() => setShowAllItems(false)}
+                onClick={() => setActiveTab('suggestions')}
                 className={cn(
-                  'px-4 py-2 text-sm font-medium border-b-2 -mb-px',
-                  !showAllItems ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                  'px-4 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap',
+                  activeTab === 'suggestions' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
                 )}
               >
-                הצעות אוטומטיות ({selectedTransaction.suggestions?.length || 0})
+                🎯 הצעות ({selectedTransaction.suggestions?.length || 0})
               </button>
               <button
-                onClick={() => setShowAllItems(true)}
+                onClick={() => setActiveTab('search')}
                 className={cn(
-                  'px-4 py-2 text-sm font-medium border-b-2 -mb-px',
-                  showAllItems ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                  'px-4 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap',
+                  activeTab === 'search' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
                 )}
               >
-                חיפוש ידני
+                🔍 חיפוש
+              </button>
+              <button
+                onClick={() => setActiveTab('create')}
+                className={cn(
+                  'px-4 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap',
+                  activeTab === 'create' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                )}
+              >
+                ➕ יצירת {selectedTransaction.amount >= 0 ? 'הכנסה' : 'הוצאה'}
+              </button>
+              <button
+                onClick={() => setActiveTab('classify')}
+                className={cn(
+                  'px-4 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap',
+                  activeTab === 'classify' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                )}
+              >
+                🏷️ סיווג מיוחד
               </button>
             </div>
 
-            {showAllItems ? (
-              /* חיפוש ידני */
-              <div className="space-y-3">
-                <div className="relative">
-                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder={`חפש ${selectedTransaction.amount >= 0 ? 'הכנסה' : 'הוצאה'} לפי שם, מספר חשבונית או סכום...`}
-                    value={manualSearch}
-                    onChange={(e) => setManualSearch(e.target.value)}
-                    className="w-full pr-10 pl-4 py-2 border rounded-lg text-sm"
-                  />
-                </div>
-                
-                <div className="max-h-72 overflow-y-auto space-y-2">
-                  {(selectedTransaction.amount >= 0 ? incomeList : expenseList)
-                    .filter(item => {
-                      if (!manualSearch) return true
-                      const search = manualSearch.toLowerCase()
-                      const name = selectedTransaction.amount >= 0 
-                        ? ((item as any).customer?.name || (item as Income).description || '')
-                        : ((item as any).supplier?.name || (item as Expense).description || '')
-                      return (
-                        name.toLowerCase().includes(search) ||
-                        item.invoice_number?.toLowerCase().includes(search) ||
-                        item.amount.toString().includes(search)
-                      )
-                    })
-                    .slice(0, 50)
-                    .map((item, idx) => (
-                      <div 
-                        key={idx}
-                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
-                      >
-                        <div className="flex-1">
-                          <p className="font-medium text-gray-900">
-                            {selectedTransaction.amount >= 0
-                              ? ((item as any).customer?.name || (item as Income).description || 'הכנסה')
-                              : ((item as any).supplier?.name || (item as Expense).description || 'הוצאה')
-                            }
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {formatDateShort(item.date)} • {formatCurrency(item.amount)}
-                            {item.invoice_number && ` • מס׳ ${item.invoice_number}`}
-                          </p>
-                        </div>
-                        <Button
-                          size="sm"
-                          onClick={() => handleManualMatch(selectedTransaction, item, selectedTransaction.amount >= 0 ? 'income' : 'expense')}
-                          loading={processing}
+            {/* תוכן הטאבים */}
+            <div className="min-h-[300px]">
+              {/* טאב הצעות אוטומטיות */}
+              {activeTab === 'suggestions' && (
+                <div>
+                  {selectedTransaction.suggestions && selectedTransaction.suggestions.length > 0 ? (
+                    <div className="space-y-2 max-h-72 overflow-y-auto">
+                      {selectedTransaction.suggestions.map((suggestion, idx) => (
+                        <div 
+                          key={idx}
+                          className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors"
                         >
-                          <Check className="w-4 h-4" />
-                          התאם
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={cn(
+                                'px-2 py-0.5 rounded text-xs font-bold',
+                                getScoreColor(suggestion.score)
+                              )}>
+                                {suggestion.score}% התאמה
+                              </span>
+                              {suggestion.reasons.map((reason, i) => (
+                                <Badge key={i} variant="default" className="text-xs">
+                                  {reason}
+                                </Badge>
+                              ))}
+                            </div>
+                            <p className="font-medium text-gray-900">
+                              {suggestion.type === 'income'
+                                ? (suggestion.item as Income).description || (suggestion.item as any).customer?.name || 'הכנסה'
+                                : (suggestion.item as Expense).description || (suggestion.item as any).supplier?.name || 'הוצאה'
+                              }
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {formatDateShort(suggestion.item.date)} • {formatCurrency(suggestion.item.amount)}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => handleApproveMatch(selectedTransaction, suggestion)}
+                            loading={processing}
+                          >
+                            <Check className="w-4 h-4" />
+                            אשר
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center">
+                      <AlertCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-500 mb-4">לא נמצאו התאמות אוטומטיות</p>
+                      <div className="flex justify-center gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setActiveTab('search')}>
+                          <Search className="w-4 h-4" />
+                          חפש ידנית
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setActiveTab('create')}>
+                          <Plus className="w-4 h-4" />
+                          צור חדש
                         </Button>
                       </div>
-                    ))}
-                  {(selectedTransaction.amount >= 0 ? incomeList : expenseList).length === 0 && (
-                    <p className="text-center text-gray-500 py-4">
-                      אין {selectedTransaction.amount >= 0 ? 'הכנסות' : 'הוצאות'} במערכת
-                    </p>
+                    </div>
                   )}
                 </div>
-              </div>
-            ) : (
-              /* הצעות אוטומטיות */
-              <div>
-                <p className="text-sm font-medium text-gray-700 mb-3">
-                  {selectedTransaction.amount >= 0 ? 'הכנסות מתאימות:' : 'הוצאות מתאימות:'}
-                </p>
-                
-                {selectedTransaction.suggestions && selectedTransaction.suggestions.length > 0 ? (
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {selectedTransaction.suggestions.map((suggestion, idx) => (
-                      <div 
-                        key={idx}
-                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className={cn(
-                              'px-2 py-0.5 rounded text-xs font-bold',
-                              getScoreColor(suggestion.score)
-                            )}>
-                              {suggestion.score}% התאמה
-                            </span>
-                            {suggestion.reasons.map((reason, i) => (
-                              <Badge key={i} variant="default" className="text-xs">
-                                {reason}
-                              </Badge>
-                            ))}
-                          </div>
-                          <p className="font-medium text-gray-900">
-                            {suggestion.type === 'income'
-                              ? (suggestion.item as Income).description || (suggestion.item as any).customer?.name || 'הכנסה'
-                              : (suggestion.item as Expense).description || (suggestion.item as any).supplier?.name || 'הוצאה'
-                            }
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {formatDateShort(suggestion.item.date)} • {formatCurrency(suggestion.item.amount)}
-                            {suggestion.item.invoice_number && ` • מס׳ ${suggestion.item.invoice_number}`}
-                          </p>
-                        </div>
-                        <Button
-                          size="sm"
-                          onClick={() => handleApproveMatch(selectedTransaction, suggestion)}
-                          loading={processing}
-                        >
-                          <Check className="w-4 h-4" />
-                          אשר
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-4 bg-gray-50 rounded-lg text-center">
-                    <p className="text-gray-500">לא נמצאו התאמות אוטומטיות</p>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="mt-2"
-                      onClick={() => setShowAllItems(true)}
-                    >
-                      <Search className="w-4 h-4" />
-                      חפש ידנית
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
 
-            {/* כפתורי סגירה */}
-            <div className="flex justify-end gap-2 pt-4 border-t">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowMatchModal(false)
-                  setSelectedTransaction(null)
-                  setManualSearch('')
-                  setShowAllItems(false)
-                }}
-              >
+              {/* טאב חיפוש ידני */}
+              {activeTab === 'search' && (
+                <div className="space-y-3">
+                  <div className="relative">
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder={`חפש ${selectedTransaction.amount >= 0 ? 'הכנסה' : 'הוצאה'} לפי שם, מספר חשבונית או סכום...`}
+                      value={manualSearch}
+                      onChange={(e) => setManualSearch(e.target.value)}
+                      className="w-full pr-10 pl-4 py-2 border rounded-lg text-sm"
+                    />
+                  </div>
+                  
+                  <div className="max-h-64 overflow-y-auto space-y-2">
+                    {(selectedTransaction.amount >= 0 ? incomeList : expenseList)
+                      .filter(item => {
+                        if (!manualSearch) return true
+                        const search = manualSearch.toLowerCase()
+                        const name = selectedTransaction.amount >= 0 
+                          ? ((item as any).customer?.name || (item as Income).description || '')
+                          : ((item as any).supplier?.name || (item as Expense).description || '')
+                        return (
+                          name.toLowerCase().includes(search) ||
+                          item.invoice_number?.toLowerCase().includes(search) ||
+                          item.amount.toString().includes(search)
+                        )
+                      })
+                      .slice(0, 30)
+                      .map((item, idx) => (
+                        <div 
+                          key={idx}
+                          className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
+                        >
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-900">
+                              {selectedTransaction.amount >= 0
+                                ? ((item as any).customer?.name || (item as Income).description || 'הכנסה')
+                                : ((item as any).supplier?.name || (item as Expense).description || 'הוצאה')
+                              }
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {formatDateShort(item.date)} • {formatCurrency(item.amount)}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => handleManualMatch(selectedTransaction, item, selectedTransaction.amount >= 0 ? 'income' : 'expense')}
+                            loading={processing}
+                          >
+                            <Check className="w-4 h-4" />
+                            התאם
+                          </Button>
+                        </div>
+                      ))}
+                    {(selectedTransaction.amount >= 0 ? incomeList : expenseList).length === 0 && (
+                      <p className="text-center text-gray-500 py-4">
+                        אין {selectedTransaction.amount >= 0 ? 'הכנסות' : 'הוצאות'} במערכת
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* טאב יצירת הכנסה/הוצאה חדשה */}
+              {activeTab === 'create' && (
+                <div className="space-y-4">
+                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <p className="text-sm text-blue-700">
+                      <strong>💡 טיפ:</strong> צור {selectedTransaction.amount >= 0 ? 'הכנסה' : 'הוצאה'} חדשה מתנועת הבנק. 
+                      הסכום ({formatCurrency(Math.abs(selectedTransaction.amount))}) והתאריך יועתקו אוטומטית.
+                    </p>
+                  </div>
+                  
+                  <Input
+                    label="תיאור"
+                    value={createForm.description}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder={selectedTransaction.description || 'תיאור...'}
+                  />
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <Select
+                      label="קטגוריה"
+                      value={createForm.category_id}
+                      onChange={(e) => setCreateForm(prev => ({ ...prev, category_id: e.target.value }))}
+                      options={[
+                        { value: '', label: 'בחר קטגוריה' },
+                        ...categories
+                          .filter(c => selectedTransaction.amount >= 0 ? c.type === 'income' : c.type === 'expense')
+                          .map(c => ({ value: c.id, label: c.name }))
+                      ]}
+                    />
+                    
+                    {selectedTransaction.amount >= 0 ? (
+                      <Select
+                        label="לקוח"
+                        value={createForm.customer_id}
+                        onChange={(e) => setCreateForm(prev => ({ ...prev, customer_id: e.target.value }))}
+                        options={[
+                          { value: '', label: 'בחר לקוח (אופציונלי)' },
+                          ...customers.map(c => ({ value: c.id, label: c.name }))
+                        ]}
+                      />
+                    ) : (
+                      <Select
+                        label="ספק"
+                        value={createForm.supplier_id}
+                        onChange={(e) => setCreateForm(prev => ({ ...prev, supplier_id: e.target.value }))}
+                        options={[
+                          { value: '', label: 'בחר ספק (אופציונלי)' },
+                          ...suppliers.map(s => ({ value: s.id, label: s.name }))
+                        ]}
+                      />
+                    )}
+                  </div>
+                  
+                  <Input
+                    label="מספר חשבונית (אופציונלי)"
+                    value={createForm.invoice_number}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, invoice_number: e.target.value }))}
+                    placeholder="מספר חשבונית..."
+                  />
+                  
+                  <Button 
+                    className="w-full"
+                    onClick={() => handleCreateFromTransaction(selectedTransaction)}
+                    loading={processing}
+                  >
+                    <Plus className="w-4 h-4" />
+                    צור {selectedTransaction.amount >= 0 ? 'הכנסה' : 'הוצאה'} והתאם
+                  </Button>
+                </div>
+              )}
+
+              {/* טאב סיווג מיוחד */}
+              {activeTab === 'classify' && (
+                <div className="space-y-3">
+                  <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                    <p className="text-sm text-amber-700">
+                      <strong>🏷️ סיווג מיוחד:</strong> לתנועות כמו משכורות, מע"מ, הלוואות, וכו' - 
+                      שלא צריכות התאמה לחשבונית ספציפית.
+                    </p>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                    {transactionTypes.map((type) => {
+                      const Icon = type.icon
+                      return (
+                        <button
+                          key={type.value}
+                          onClick={() => handleClassifyTransaction(selectedTransaction, type.value)}
+                          disabled={processing}
+                          className="flex items-center gap-3 p-3 border-2 rounded-lg hover:bg-gray-50 hover:border-primary-300 transition-all text-right"
+                        >
+                          <div className="p-2 bg-gray-100 rounded-lg">
+                            <Icon className="w-5 h-5 text-gray-600" />
+                          </div>
+                          <span className="font-medium text-gray-700">{type.label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* כפתור סגירה */}
+            <div className="flex justify-end pt-4 border-t">
+              <Button variant="outline" onClick={closeModal}>
                 סגור
               </Button>
             </div>
