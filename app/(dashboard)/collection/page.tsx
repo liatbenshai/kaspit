@@ -69,7 +69,13 @@ export default function CollectionPage() {
   const [selectedItem, setSelectedItem] = useState<CollectionItem | null>(null)
   const [reminderHistory, setReminderHistory] = useState<any[]>([])
   
-  const [paymentData, setPaymentData] = useState({ payment_date: new Date().toISOString().split('T')[0], payment_method: '' })
+  const [paymentData, setPaymentData] = useState({ 
+    payment_date: new Date().toISOString().split('T')[0], 
+    payment_method: '',
+    actual_payer_name: '',
+    receipt_number: '',
+    project_number: '',
+  })
   const [reminderType, setReminderType] = useState<'email' | 'whatsapp' | 'phone'>('whatsapp')
   const [reminderMessage, setReminderMessage] = useState('')
   const [notesData, setNotesData] = useState({ collection_status: '', collection_notes: '', promised_date: '' })
@@ -145,6 +151,16 @@ export default function CollectionPage() {
     setReminderType('whatsapp')
     generateReminderMessage(item, 'whatsapp')
     setShowReminderModal(true)
+  }
+
+  const openPaymentModal = (item: CollectionItem) => {
+    setSelectedItem(item)
+    // מילוי אוטומטי של מספר פרויקט אם קיים
+    setPaymentData(prev => ({
+      ...prev,
+      project_number: (item as any).project_number || '',
+    }))
+    setShowPaymentModal(true)
   }
 
   const generateReminderMessage = (item: CollectionItem, type: 'email' | 'whatsapp' | 'phone') => {
@@ -260,11 +276,20 @@ export default function CollectionPage() {
       payment_status: 'paid',
       payment_date: paymentData.payment_date,
       payment_method: paymentData.payment_method || null,
+      actual_payer_name: paymentData.actual_payer_name || null,
+      receipt_number: paymentData.receipt_number || null,
+      project_number: paymentData.project_number || null,
       collection_status: 'none',
     }).eq('id', selectedItem.id)
     setShowPaymentModal(false)
     setSelectedItem(null)
-    setPaymentData({ payment_date: new Date().toISOString().split('T')[0], payment_method: '' })
+    setPaymentData({ 
+      payment_date: new Date().toISOString().split('T')[0], 
+      payment_method: '',
+      actual_payer_name: '',
+      receipt_number: '',
+      project_number: '',
+    })
     setSuccessMessage('החשבונית סומנה כשולמה!')
     loadData()
   }
@@ -478,7 +503,8 @@ export default function CollectionPage() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>לקוח</TableHead>
-                          <TableHead>מס׳</TableHead>
+                          <TableHead>מס׳ חשבונית</TableHead>
+                          <TableHead>פרויקט</TableHead>
                           <TableHead>לתשלום</TableHead>
                           <TableHead>סטטוס</TableHead>
                           <TableHead>סכום</TableHead>
@@ -493,6 +519,7 @@ export default function CollectionPage() {
                               {item.customer?.phone && <p className="text-xs text-gray-500">{item.customer.phone}</p>}
                             </TableCell>
                             <TableCell className="font-mono">{item.invoice_number || '-'}</TableCell>
+                            <TableCell className="font-mono text-sm">{(item as any).project_number || '-'}</TableCell>
                             <TableCell>
                               <p>{item.due_date ? formatDateShort(item.due_date) : '-'}</p>
                               {item.is_overdue && <p className="text-xs text-red-600">{item.days_overdue} ימים</p>}
@@ -509,7 +536,7 @@ export default function CollectionPage() {
                               <div className="flex gap-1">
                                 <Button size="sm" variant="ghost" onClick={() => openReminderModal(item)}><Send className="w-4 h-4" /></Button>
                                 <Button size="sm" variant="ghost" onClick={() => openHistoryModal(item)}><History className="w-4 h-4" /></Button>
-                                <Button size="sm" variant="outline" onClick={() => { setSelectedItem(item); setShowPaymentModal(true) }}><Check className="w-4 h-4" /></Button>
+                                <Button size="sm" variant="outline" onClick={() => openPaymentModal(item)}><Check className="w-4 h-4" /></Button>
                               </div>
                             </TableCell>
                           </TableRow>
@@ -531,7 +558,8 @@ export default function CollectionPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>לקוח</TableHead>
-                <TableHead>מס׳</TableHead>
+                <TableHead>מס׳ חשבונית</TableHead>
+                <TableHead>פרויקט</TableHead>
                 <TableHead>תאריך</TableHead>
                 <TableHead>לתשלום</TableHead>
                 <TableHead>סטטוס גבייה</TableHead>
@@ -542,7 +570,7 @@ export default function CollectionPage() {
             <TableBody>
               {filteredItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12">
+                  <TableCell colSpan={8} className="text-center py-12">
                     <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
                     <p className="text-gray-500">אין חשבוניות פתוחות!</p>
                   </TableCell>
@@ -555,6 +583,7 @@ export default function CollectionPage() {
                       {item.customer?.phone && <a href={`tel:${item.customer.phone}`} className="text-xs text-blue-600">{item.customer.phone}</a>}
                     </TableCell>
                     <TableCell className="font-mono">{item.invoice_number || '-'}</TableCell>
+                    <TableCell className="font-mono text-sm">{(item as any).project_number || '-'}</TableCell>
                     <TableCell>{formatDateShort(item.date)}</TableCell>
                     <TableCell>
                       <p>{item.due_date ? formatDateShort(item.due_date) : '-'}</p>
@@ -573,7 +602,7 @@ export default function CollectionPage() {
                       <div className="flex gap-1">
                         <Button size="sm" variant="ghost" onClick={() => openReminderModal(item)} title="תזכורת"><Send className="w-4 h-4" /></Button>
                         <Button size="sm" variant="ghost" onClick={() => openHistoryModal(item)} title="היסטוריה"><History className="w-4 h-4" /></Button>
-                        <Button size="sm" variant="outline" onClick={() => { setSelectedItem(item); setShowPaymentModal(true) }}><Check className="w-4 h-4" /></Button>
+                        <Button size="sm" variant="outline" onClick={() => openPaymentModal(item)}><Check className="w-4 h-4" /></Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -591,7 +620,10 @@ export default function CollectionPage() {
             <div className="bg-gray-50 rounded-lg p-4 flex justify-between items-center">
               <div>
                 <p className="font-medium">{selectedItem.customer?.name || '-'}</p>
-                <p className="text-sm text-gray-500">חשבונית {selectedItem.invoice_number || '-'}</p>
+                <p className="text-sm text-gray-500">
+                  חשבונית {selectedItem.invoice_number || '-'}
+                  {(selectedItem as any).project_number && <span> | פרויקט {(selectedItem as any).project_number}</span>}
+                </p>
                 {selectedItem.is_overdue && <p className="text-sm text-red-600">{selectedItem.days_overdue} ימים באיחור</p>}
               </div>
               <p className="text-2xl font-bold text-primary-600">{formatCurrency(selectedItem.amount)}</p>
@@ -631,7 +663,10 @@ export default function CollectionPage() {
           <div className="space-y-4">
             <div className="bg-gray-50 rounded-lg p-3">
               <p className="font-medium">{selectedItem.customer?.name}</p>
-              <p className="text-sm text-gray-500">חשבונית {selectedItem.invoice_number || '-'} | {formatCurrency(selectedItem.amount)}</p>
+              <p className="text-sm text-gray-500">
+                חשבונית {selectedItem.invoice_number || '-'} | {formatCurrency(selectedItem.amount)}
+                {(selectedItem as any).project_number && <span> | פרויקט {(selectedItem as any).project_number}</span>}
+              </p>
             </div>
 
             {reminderHistory.length === 0 ? (
@@ -696,22 +731,48 @@ export default function CollectionPage() {
             <div className="bg-gray-50 rounded-lg p-4 flex justify-between items-center">
               <div>
                 <p className="font-medium">{selectedItem.customer?.name || '-'}</p>
-                <p className="text-sm text-gray-500">חשבונית {selectedItem.invoice_number || '-'}</p>
+                <p className="text-sm text-gray-500">
+                  חשבונית {selectedItem.invoice_number || '-'}
+                  {(selectedItem as any).project_number && <span> | פרויקט {(selectedItem as any).project_number}</span>}
+                </p>
               </div>
               <p className="text-2xl font-bold text-primary-600">{formatCurrency(selectedItem.amount)}</p>
             </div>
 
-            <Input label="תאריך תשלום" type="date" value={paymentData.payment_date}
-              onChange={(e) => setPaymentData(p => ({ ...p, payment_date: e.target.value }))} />
+            <div className="grid grid-cols-2 gap-4">
+              <Input label="תאריך תשלום" type="date" value={paymentData.payment_date}
+                onChange={(e) => setPaymentData(p => ({ ...p, payment_date: e.target.value }))} />
 
-            <Select label="אמצעי תשלום" options={[
-              { value: '', label: 'בחר' },
-              { value: 'bank_transfer', label: 'העברה בנקאית' },
-              { value: 'credit_card', label: 'כרטיס אשראי' },
-              { value: 'cash', label: 'מזומן' },
-              { value: 'check', label: 'צ׳ק' },
-              { value: 'bit', label: 'ביט' },
-            ]} value={paymentData.payment_method} onChange={(e) => setPaymentData(p => ({ ...p, payment_method: e.target.value }))} />
+              <Select label="אמצעי תשלום" options={[
+                { value: '', label: 'בחר' },
+                { value: 'bank_transfer', label: 'העברה בנקאית' },
+                { value: 'credit_card', label: 'כרטיס אשראי' },
+                { value: 'cash', label: 'מזומן' },
+                { value: 'check', label: 'צ׳ק' },
+                { value: 'bit', label: 'ביט' },
+              ]} value={paymentData.payment_method} onChange={(e) => setPaymentData(p => ({ ...p, payment_method: e.target.value }))} />
+            </div>
+
+            <Input 
+              label="מספר פרויקט/עבודה" 
+              placeholder="לדוגמה: 2024-001"
+              value={paymentData.project_number}
+              onChange={(e) => setPaymentData(p => ({ ...p, project_number: e.target.value }))} 
+            />
+
+            <Input 
+              label="מספר חשבונית מס קבלה" 
+              placeholder="מספר הקבלה שהונפקה"
+              value={paymentData.receipt_number}
+              onChange={(e) => setPaymentData(p => ({ ...p, receipt_number: e.target.value }))} 
+            />
+
+            <Input 
+              label="שם מי ששילם בפועל (אם שונה מהלקוח)" 
+              placeholder="השאר ריק אם הלקוח עצמו שילם"
+              value={paymentData.actual_payer_name}
+              onChange={(e) => setPaymentData(p => ({ ...p, actual_payer_name: e.target.value }))} 
+            />
 
             <div className="flex gap-3 pt-4">
               <Button onClick={markAsPaid}><Check className="w-4 h-4" />אשר</Button>

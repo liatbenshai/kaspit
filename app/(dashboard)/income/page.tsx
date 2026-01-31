@@ -196,6 +196,7 @@ export default function IncomePage() {
     date: new Date().toISOString().split('T')[0], due_date: '', payment_terms: '',
     description: '', invoice_number: '', payment_status: 'pending' as 'pending' | 'partial' | 'paid',
     payment_date: '', payment_method: '' as PaymentMethod,
+    project_number: '', receipt_number: '', actual_payer_name: '',
   })
 
   // פתיחת מודל הוספה מ-URL parameter
@@ -285,6 +286,9 @@ export default function IncomePage() {
         payment_status: formData.payment_status,
         payment_date: formData.payment_date || null,
         payment_method: formData.payment_method || null,
+        project_number: formData.project_number || null,
+        receipt_number: formData.receipt_number || null,
+        actual_payer_name: formData.actual_payer_name || null,
       }
 
       if (editingIncome) {
@@ -386,6 +390,9 @@ export default function IncomePage() {
       payment_status: item.payment_status,
       payment_date: item.payment_date || '',
       payment_method: (item as any).payment_method || '',
+      project_number: (item as any).project_number || '',
+      receipt_number: (item as any).receipt_number || '',
+      actual_payer_name: (item as any).actual_payer_name || '',
     })
     setShowAddModal(true)
   }
@@ -657,6 +664,7 @@ export default function IncomePage() {
       vat_exempt: false, document_type: 'tax_invoice', linked_document_id: '',
       date: new Date().toISOString().split('T')[0], due_date: '', payment_terms: '',
       description: '', invoice_number: '', payment_status: 'pending', payment_date: '', payment_method: '',
+      project_number: '', receipt_number: '', actual_payer_name: '',
     })
     setInputMode('before_vat')
   }
@@ -1079,6 +1087,33 @@ export default function IncomePage() {
           {formData.payment_status === 'paid' && (
             <Input label="תאריך תשלום" type="date" value={formData.payment_date} onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })} />
           )}
+
+          {/* שדות מורחבים */}
+          <div className="border-t pt-4 mt-4">
+            <p className="text-sm font-medium text-gray-700 mb-3">פרטים נוספים (אופציונלי)</p>
+            
+            <Input 
+              label="מספר פרויקט/עבודה" 
+              value={formData.project_number} 
+              onChange={(e) => setFormData({ ...formData, project_number: e.target.value })} 
+              placeholder="לדוגמה: 2024-001" 
+            />
+
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <Input 
+                label="מספר חשבונית מס קבלה" 
+                value={formData.receipt_number} 
+                onChange={(e) => setFormData({ ...formData, receipt_number: e.target.value })} 
+                placeholder="מספר הקבלה" 
+              />
+              <Input 
+                label="שם מי ששילם בפועל" 
+                value={formData.actual_payer_name} 
+                onChange={(e) => setFormData({ ...formData, actual_payer_name: e.target.value })} 
+                placeholder="אם שונה מהלקוח" 
+              />
+            </div>
+          </div>
 
           <div className="flex gap-3 pt-4">
             <Button type="submit">{editingIncome ? 'עדכון' : 'הוספה'}</Button>
