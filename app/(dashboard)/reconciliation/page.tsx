@@ -798,131 +798,195 @@ export default function ReconciliationPage() {
   }
 
   // ============================================
-  // זיהוי אוטומטי של כל ההכנסות (זיכויים בבנק)
+  // זיהוי אוטומטי של כל ההכנסות וההוצאות
   // ============================================
-  const autoMatchAllIncome = async () => {
+  const autoMatchAll = async () => {
     if (!companyId) {
       setErrorMessage('לא נמצא חברה')
       return
     }
     
     setProcessing(true)
-    setSuccessMessage('מזהה הכנסות...')
+    setSuccessMessage('מזהה הכנסות והוצאות...')
     
     try {
-      // סינון רק זיכויים (הכנסות) מהתנועות הלא מותאמות
-      const creditTransactions = unmatchedTransactions.filter(t => t.amount > 0)
-      
-      if (creditTransactions.length === 0) {
-        setSuccessMessage('אין תנועות זיכוי (הכנסות) לזיהוי')
-        setProcessing(false)
-        return
-      }
-      
-      console.log(`Found ${creditTransactions.length} credit transactions to process`)
-      
-      // שליפת לקוחות קיימים
+      // שליפת לקוחות וספקים קיימים
       const { data: existingCustomers } = await supabase
         .from('customers')
         .select('id, name')
         .eq('company_id', companyId)
       
+      const { data: existingSuppliers } = await supabase
+        .from('suppliers')
+        .select('id, name')
+        .eq('company_id', companyId)
+      
       const customerMap = new Map((existingCustomers || []).map(c => [c.name.toLowerCase().trim(), c.id]))
+      const supplierMap = new Map((existingSuppliers || []).map(s => [s.name.toLowerCase().trim(), s.id]))
       
       let createdIncomeCount = 0
+      let createdExpenseCount = 0
       let createdCustomerCount = 0
+      let createdSupplierCount = 0
       let skippedCount = 0
       
-      for (const trans of creditTransactions) {
+      for (const trans of unmatchedTransactions) {
         const desc = (trans.description || '').trim()
+        const isCredit = trans.amount > 0
+        const absAmount = Math.abs(trans.amount)
         
-        // שם לקוח = תיאור התנועה (עם ניקוי מינימלי)
-        let customerName = desc
+        // ניקוי שם מתיאור
+        let cleanName = desc
           .replace(/^העברה\s*/i, '')
           .replace(/^זיכוי\s*/i, '')
+          .replace(/^חיוב\s*/i, '')
+          .replace(/^תשלום\s*/i, '')
           .replace(/^מ-?\s*/i, '')
+          .replace(/^ל-?\s*/i, '')
           .replace(/^\d+\s*/, '')
           .trim()
         
-        if (!customerName || customerName.length < 2) {
-          customerName = desc || `לקוח ${trans.date}`
+        if (!cleanName || cleanName.length < 2) {
+          cleanName = desc || `${isCredit ? 'לקוח' : 'ספק'} ${trans.date}`
         }
         
-        console.log(`Processing: "${desc}" -> Customer: "${customerName}"`)
+        console.log(`Processing: "${desc}" -> ${isCredit ? 'Customer' : 'Supplier'}: "${cleanName}"`)
         
-        // בדיקה אם הלקוח קיים
-        let customerId = customerMap.get(customerName.toLowerCase().trim())
-        
-        // יצירת לקוח חדש אם לא קיים
-        if (!customerId) {
-          const { data: newCustomer, error: custError } = await supabase
-            .from('customers')
+        if (isCredit) {
+          // === הכנסה ===
+          let customerId = customerMap.get(cleanName.toLowerCase().trim())
+          
+          // יצירת לקוח חדש אם לא קיים
+          if (!customerId) {
+            const { data: newCustomer, error: custError } = await supabase
+              .from('customers')
+              .insert({
+                company_id: companyId,
+                name: cleanName,
+                is_active: true,
+              })
+              .select()
+              .single()
+            
+            if (custError) {
+              console.error('Error creating customer:', custError)
+              skippedCount++
+              continue
+            }
+            
+            customerId = newCustomer.id
+            customerMap.set(cleanName.toLowerCase().trim(), customerId)
+            createdCustomerCount++
+          }
+          
+          // יצירת הכנסה
+          const { data: newIncome, error: incomeError } = await supabase
+            .from('income')
             .insert({
               company_id: companyId,
-              name: customerName,
-              is_active: true,
+              amount: absAmount,
+              date: trans.date,
+              description: desc,
+              customer_id: customerId,
+              payment_status: 'paid',
+              document_type: 'receipt',
+              document_status: 'open',
+              vat_exempt: false,
             })
             .select()
             .single()
           
-          if (custError) {
-            console.error('Error creating customer:', custError)
+          if (incomeError) {
+            console.error('Error creating income:', incomeError)
             skippedCount++
             continue
           }
           
-          customerId = newCustomer.id
-          customerMap.set(customerName.toLowerCase().trim(), customerId)
-          createdCustomerCount++
-          console.log(`Created customer: "${customerName}"`)
+          // עדכון תנועת הבנק
+          await supabase
+            .from('bank_transactions')
+            .update({
+              matched_type: 'income',
+              matched_id: newIncome.id,
+            })
+            .eq('id', trans.id)
+          
+          createdIncomeCount++
+          
+        } else {
+          // === הוצאה ===
+          let supplierId = supplierMap.get(cleanName.toLowerCase().trim())
+          
+          // יצירת ספק חדש אם לא קיים
+          if (!supplierId) {
+            const { data: newSupplier, error: suppError } = await supabase
+              .from('suppliers')
+              .insert({
+                company_id: companyId,
+                name: cleanName,
+                is_active: true,
+              })
+              .select()
+              .single()
+            
+            if (suppError) {
+              console.error('Error creating supplier:', suppError)
+              skippedCount++
+              continue
+            }
+            
+            supplierId = newSupplier.id
+            supplierMap.set(cleanName.toLowerCase().trim(), supplierId)
+            createdSupplierCount++
+          }
+          
+          // יצירת הוצאה
+          const { data: newExpense, error: expenseError } = await supabase
+            .from('expenses')
+            .insert({
+              company_id: companyId,
+              amount: absAmount,
+              date: trans.date,
+              description: desc,
+              supplier_id: supplierId,
+              payment_status: 'paid',
+              document_type: 'invoice',
+            })
+            .select()
+            .single()
+          
+          if (expenseError) {
+            console.error('Error creating expense:', expenseError)
+            skippedCount++
+            continue
+          }
+          
+          // עדכון תנועת הבנק
+          await supabase
+            .from('bank_transactions')
+            .update({
+              matched_type: 'expense',
+              matched_id: newExpense.id,
+            })
+            .eq('id', trans.id)
+          
+          createdExpenseCount++
         }
-        
-        // יצירת הכנסה
-        const { data: newIncome, error: incomeError } = await supabase
-          .from('income')
-          .insert({
-            company_id: companyId,
-            amount: trans.amount,
-            date: trans.date,
-            description: desc,
-            customer_id: customerId,
-            payment_status: 'paid',
-            document_type: 'receipt',
-            document_status: 'open',
-            vat_exempt: false,
-          })
-          .select()
-          .single()
-        
-        if (incomeError) {
-          console.error('Error creating income:', incomeError)
-          skippedCount++
-          continue
-        }
-        
-        // עדכון תנועת הבנק
-        await supabase
-          .from('bank_transactions')
-          .update({
-            matched_type: 'income',
-            matched_id: newIncome.id,
-          })
-          .eq('id', trans.id)
-        
-        createdIncomeCount++
       }
       
       // הודעה למשתמש
       const messages = []
       if (createdIncomeCount > 0) messages.push(`${createdIncomeCount} הכנסות`)
-      if (createdCustomerCount > 0) messages.push(`${createdCustomerCount} לקוחות חדשים`)
+      if (createdCustomerCount > 0) messages.push(`${createdCustomerCount} לקוחות`)
+      if (createdExpenseCount > 0) messages.push(`${createdExpenseCount} הוצאות`)
+      if (createdSupplierCount > 0) messages.push(`${createdSupplierCount} ספקים`)
       
       if (messages.length > 0) {
         let msg = `✅ נוצרו: ${messages.join(', ')}`
         if (skippedCount > 0) msg += ` (${skippedCount} דולגו)`
         setSuccessMessage(msg)
       } else {
-        setSuccessMessage('לא נוצרו הכנסות חדשות')
+        setSuccessMessage('לא נוצרו רשומות חדשות')
       }
       
       loadData()
@@ -952,12 +1016,12 @@ export default function ReconciliationPage() {
           <div className="flex gap-2">
             <Button 
               variant="primary" 
-              onClick={autoMatchAllIncome}
+              onClick={autoMatchAll}
               loading={processing}
-              disabled={unmatchedTransactions.filter(t => t.amount > 0).length === 0}
+              disabled={unmatchedTransactions.length === 0}
             >
               <Sparkles className="w-4 h-4" />
-              זהה הכנסות ({unmatchedTransactions.filter(t => t.amount > 0).length})
+              זהה הכל אוטומטית ({unmatchedTransactions.length})
             </Button>
             <Button variant="outline" onClick={loadData}>
               <RefreshCw className="w-4 h-4" />
