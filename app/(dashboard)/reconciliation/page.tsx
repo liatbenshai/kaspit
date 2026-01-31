@@ -28,7 +28,8 @@ import {
   Banknote,
   CreditCard,
   Users,
-  FileText
+  FileText,
+  Sparkles
 } from 'lucide-react'
 import type { BankTransaction, Income, Expense, Category, Supplier, Customer } from '@/types'
 
@@ -52,6 +53,7 @@ export default function ReconciliationPage() {
   const [showMatchModal, setShowMatchModal] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [manualSearch, setManualSearch] = useState('')
   const [showAllItems, setShowAllItems] = useState(false)
   
@@ -795,6 +797,144 @@ export default function ReconciliationPage() {
     return 'text-gray-600 bg-gray-50'
   }
 
+  // ============================================
+  // זיהוי אוטומטי של כל ההכנסות (זיכויים בבנק)
+  // ============================================
+  const autoMatchAllIncome = async () => {
+    if (!companyId) {
+      setErrorMessage('לא נמצא חברה')
+      return
+    }
+    
+    setProcessing(true)
+    setSuccessMessage('מזהה הכנסות...')
+    
+    try {
+      // סינון רק זיכויים (הכנסות) מהתנועות הלא מותאמות
+      const creditTransactions = unmatchedTransactions.filter(t => t.amount > 0)
+      
+      if (creditTransactions.length === 0) {
+        setSuccessMessage('אין תנועות זיכוי (הכנסות) לזיהוי')
+        setProcessing(false)
+        return
+      }
+      
+      console.log(`Found ${creditTransactions.length} credit transactions to process`)
+      
+      // שליפת לקוחות קיימים
+      const { data: existingCustomers } = await supabase
+        .from('customers')
+        .select('id, name')
+        .eq('company_id', companyId)
+      
+      const customerMap = new Map((existingCustomers || []).map(c => [c.name.toLowerCase().trim(), c.id]))
+      
+      let createdIncomeCount = 0
+      let createdCustomerCount = 0
+      let skippedCount = 0
+      
+      for (const trans of creditTransactions) {
+        const desc = (trans.description || '').trim()
+        
+        // שם לקוח = תיאור התנועה (עם ניקוי מינימלי)
+        let customerName = desc
+          .replace(/^העברה\s*/i, '')
+          .replace(/^זיכוי\s*/i, '')
+          .replace(/^מ-?\s*/i, '')
+          .replace(/^\d+\s*/, '')
+          .trim()
+        
+        if (!customerName || customerName.length < 2) {
+          customerName = desc || `לקוח ${trans.date}`
+        }
+        
+        console.log(`Processing: "${desc}" -> Customer: "${customerName}"`)
+        
+        // בדיקה אם הלקוח קיים
+        let customerId = customerMap.get(customerName.toLowerCase().trim())
+        
+        // יצירת לקוח חדש אם לא קיים
+        if (!customerId) {
+          const { data: newCustomer, error: custError } = await supabase
+            .from('customers')
+            .insert({
+              company_id: companyId,
+              name: customerName,
+              is_active: true,
+            })
+            .select()
+            .single()
+          
+          if (custError) {
+            console.error('Error creating customer:', custError)
+            skippedCount++
+            continue
+          }
+          
+          customerId = newCustomer.id
+          customerMap.set(customerName.toLowerCase().trim(), customerId)
+          createdCustomerCount++
+          console.log(`Created customer: "${customerName}"`)
+        }
+        
+        // יצירת הכנסה
+        const { data: newIncome, error: incomeError } = await supabase
+          .from('income')
+          .insert({
+            company_id: companyId,
+            amount: trans.amount,
+            date: trans.date,
+            description: desc,
+            customer_id: customerId,
+            payment_status: 'paid',
+            document_type: 'receipt',
+            document_status: 'open',
+            vat_exempt: false,
+          })
+          .select()
+          .single()
+        
+        if (incomeError) {
+          console.error('Error creating income:', incomeError)
+          skippedCount++
+          continue
+        }
+        
+        // עדכון תנועת הבנק
+        await supabase
+          .from('bank_transactions')
+          .update({
+            matched_type: 'income',
+            matched_id: newIncome.id,
+          })
+          .eq('id', trans.id)
+        
+        createdIncomeCount++
+      }
+      
+      // הודעה למשתמש
+      const messages = []
+      if (createdIncomeCount > 0) messages.push(`${createdIncomeCount} הכנסות`)
+      if (createdCustomerCount > 0) messages.push(`${createdCustomerCount} לקוחות חדשים`)
+      
+      if (messages.length > 0) {
+        let msg = `✅ נוצרו: ${messages.join(', ')}`
+        if (skippedCount > 0) msg += ` (${skippedCount} דולגו)`
+        setSuccessMessage(msg)
+      } else {
+        setSuccessMessage('לא נוצרו הכנסות חדשות')
+      }
+      
+      loadData()
+      
+    } catch (err: any) {
+      console.error('Auto-match error:', err)
+      setErrorMessage('שגיאה בזיהוי אוטומטי: ' + err.message)
+    } finally {
+      setProcessing(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -809,12 +949,29 @@ export default function ReconciliationPage() {
         title="התאמת תנועות"
         description="שיוך תנועות בנק להכנסות והוצאות"
         actions={
-          <Button variant="outline" onClick={loadData}>
-            <RefreshCw className="w-4 h-4" />
-            רענון
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="primary" 
+              onClick={autoMatchAllIncome}
+              loading={processing}
+              disabled={unmatchedTransactions.filter(t => t.amount > 0).length === 0}
+            >
+              <Sparkles className="w-4 h-4" />
+              זהה הכנסות ({unmatchedTransactions.filter(t => t.amount > 0).length})
+            </Button>
+            <Button variant="outline" onClick={loadData}>
+              <RefreshCw className="w-4 h-4" />
+              רענון
+            </Button>
+          </div>
         }
       />
+
+      {errorMessage && (
+        <Alert variant="danger" onClose={() => setErrorMessage(null)}>
+          {errorMessage}
+        </Alert>
+      )}
 
       {successMessage && (
         <Alert variant="success" onClose={() => setSuccessMessage(null)}>
