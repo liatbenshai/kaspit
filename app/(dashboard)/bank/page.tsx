@@ -296,6 +296,8 @@ export default function BankPage() {
             customer_id: customerId,
             payment_status: 'paid',
             document_type: 'receipt',
+            document_status: 'open',
+            vat_exempt: false,
           })
           .select()
           .single()

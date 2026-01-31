@@ -565,6 +565,8 @@ export default function ReconciliationPage() {
             payment_status: createForm.payment_status,
             bank_transaction_id: transaction.id,
             document_type: 'receipt',
+            document_status: 'open',
+            vat_exempt: false,
           })
           .select()
           .single()
