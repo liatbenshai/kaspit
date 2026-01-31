@@ -52,6 +52,7 @@ const getCollectionStatus = (status: string) => collectionStatuses.find(s => s.v
 
 export default function CollectionPage() {
   const [loading, setLoading] = useState(true)
+  const [processing, setProcessing] = useState(false)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [companyName, setCompanyName] = useState<string>('')
   const [items, setItems] = useState<CollectionItem[]>([])
@@ -272,11 +273,16 @@ export default function CollectionPage() {
 
   const markAsPaid = async () => {
     if (!selectedItem) return
+    if (processing) return // מניעת לחיצות כפולות
     
-    console.log('Marking as paid:', selectedItem.id, paymentData)
+    setProcessing(true)
+    console.log('Starting update for:', selectedItem.id)
+    console.log('Payment data:', JSON.stringify(paymentData))
     
     try {
-      const { error } = await supabase.from('income').update({
+      console.log('Calling supabase...')
+      
+      const updateData = {
         payment_status: 'paid',
         payment_date: paymentData.payment_date,
         payment_method: paymentData.payment_method || null,
@@ -284,15 +290,25 @@ export default function CollectionPage() {
         receipt_number: paymentData.receipt_number || null,
         project_number: paymentData.project_number || null,
         collection_status: 'none',
-      }).eq('id', selectedItem.id)
+      }
+      console.log('Update data:', JSON.stringify(updateData))
+      
+      const { data, error } = await supabase
+        .from('income')
+        .update(updateData)
+        .eq('id', selectedItem.id)
+        .select()
+      
+      console.log('Supabase response - data:', data, 'error:', error)
       
       if (error) {
         console.error('Error updating:', error)
         alert('שגיאה בעדכון: ' + error.message)
+        setProcessing(false)
         return
       }
       
-      console.log('Updated successfully')
+      console.log('Updated successfully!')
       setShowPaymentModal(false)
       setSelectedItem(null)
       setPaymentData({ 
@@ -307,6 +323,8 @@ export default function CollectionPage() {
     } catch (err: any) {
       console.error('Exception:', err)
       alert('שגיאה: ' + err.message)
+    } finally {
+      setProcessing(false)
     }
   }
 
@@ -791,7 +809,7 @@ export default function CollectionPage() {
             />
 
             <div className="flex gap-3 pt-4">
-              <Button onClick={markAsPaid}><Check className="w-4 h-4" />אשר</Button>
+              <Button onClick={markAsPaid} disabled={processing}>{processing ? 'שומר...' : <><Check className="w-4 h-4" />אשר</>}</Button>
               <Button variant="outline" onClick={() => setShowPaymentModal(false)}>ביטול</Button>
             </div>
           </div>
