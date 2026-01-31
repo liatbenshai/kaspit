@@ -272,26 +272,42 @@ export default function CollectionPage() {
 
   const markAsPaid = async () => {
     if (!selectedItem) return
-    await supabase.from('income').update({
-      payment_status: 'paid',
-      payment_date: paymentData.payment_date,
-      payment_method: paymentData.payment_method || null,
-      actual_payer_name: paymentData.actual_payer_name || null,
-      receipt_number: paymentData.receipt_number || null,
-      project_number: paymentData.project_number || null,
-      collection_status: 'none',
-    }).eq('id', selectedItem.id)
-    setShowPaymentModal(false)
-    setSelectedItem(null)
-    setPaymentData({ 
-      payment_date: new Date().toISOString().split('T')[0], 
-      payment_method: '',
-      actual_payer_name: '',
-      receipt_number: '',
-      project_number: '',
-    })
-    setSuccessMessage('החשבונית סומנה כשולמה!')
-    loadData()
+    
+    console.log('Marking as paid:', selectedItem.id, paymentData)
+    
+    try {
+      const { error } = await supabase.from('income').update({
+        payment_status: 'paid',
+        payment_date: paymentData.payment_date,
+        payment_method: paymentData.payment_method || null,
+        actual_payer_name: paymentData.actual_payer_name || null,
+        receipt_number: paymentData.receipt_number || null,
+        project_number: paymentData.project_number || null,
+        collection_status: 'none',
+      }).eq('id', selectedItem.id)
+      
+      if (error) {
+        console.error('Error updating:', error)
+        alert('שגיאה בעדכון: ' + error.message)
+        return
+      }
+      
+      console.log('Updated successfully')
+      setShowPaymentModal(false)
+      setSelectedItem(null)
+      setPaymentData({ 
+        payment_date: new Date().toISOString().split('T')[0], 
+        payment_method: '',
+        actual_payer_name: '',
+        receipt_number: '',
+        project_number: '',
+      })
+      setSuccessMessage('החשבונית סומנה כשולמה!')
+      loadData()
+    } catch (err: any) {
+      console.error('Exception:', err)
+      alert('שגיאה: ' + err.message)
+    }
   }
 
   const filteredItems = items.filter(item => {
